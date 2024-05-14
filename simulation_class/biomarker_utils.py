@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import fractional_matrix_power
+from scipy.integrate import solve_ivp
 
 #%% SIGMOID UTILS
 
@@ -78,3 +79,37 @@ def simulate_progression_over_stages2(transition_matrix, stages, y_init):
     return np.array([apply_transition_matrix2(transition_matrix, stage, y_init) for stage in stages])
 
 #%% ODE UTILS
+
+def random_connectivity_matrix(n, med_frac=0.1, source_rate=0.1, all_source_connections=False):
+    A = np.random.rand(n, n)
+    A = A.T @ A
+    A -= np.diag(np.diag(A))
+    K = np.copy(A)
+
+    for i in range(n):
+        local_threshold = min(med_frac * np.median(A[i, 1:]), np.max(A[i, 1:]) * 0.99)
+        indices = A[i, 1:] < local_threshold
+        indices = np.insert(indices, 0, False)
+        K[i, indices] = 0
+        K[indices, i] = 0
+
+    K /= np.max(K)
+    if all_source_connections:
+        K[0, :] = source_rate
+        K[:, 0] = source_rate
+    else:
+        K[0, :] = 0.0
+        K[:, 0] = 0.0
+
+    K[1, 0] = source_rate
+    K[0, 1] = source_rate
+
+    return K
+
+def multi_logistic_deriv(t, x, K):
+    return (np.eye(len(K)) - np.diag(x)) @ K @ x
+
+def solve_ode_system(K, x0, t_span, n_steps):
+    t_eval = np.linspace(t_span[0], t_span[1], n_steps)
+    sol = solve_ivp(multi_logistic_deriv, t_span, x0, args=(K,), t_eval=t_eval, method='RK45')
+    return sol.t, sol.y
