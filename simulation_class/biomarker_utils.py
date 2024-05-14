@@ -1,15 +1,41 @@
 import numpy as np
 from scipy.linalg import fractional_matrix_power
 
-def sigmoid_inv(x, s=0, c=1):
+#%% SIGMOID UTILS
+
+def sigmoid_inv(x: float, s: float = 0, c: float = 1) -> float:
+    """
+    Calculates the inverse of a sigmoid function to model biomarker progression.
+    
+    Parameters:
+    x (float): The input value to the sigmoid function.
+    s (float): The shift parameter, adjusting the function along the x-axis.
+    c (float): The scale parameter, adjusting the steepness of the sigmoid curve.
+    
+    Returns:
+    float: The calculated inverse sigmoid value.
+    """
     return 1 - 1 / (1 + np.exp(-(x-s)/c))
 
-def generate_transition_matrix(size, coeff):
-    """Generates a symmetric transition matrix with coefficient decay off-diagonal."""
+
+#%% TRANSITION MATRIX UTILS
+
+def generate_transition_matrix(size: int, coeff: float) -> np.ndarray:
+    """
+    Generates a symmetric transition matrix with a specified coefficient decay off-diagonal.
+    
+    Parameters:
+    size (int): The size of the square matrix to generate.
+    coeff (float): The coefficient value to fill off-diagonal adjacency positions.
+    
+    Returns:
+    np.ndarray: A symmetric transition matrix of specified size and coefficients.
+    """
     A = np.eye(size)
     np.fill_diagonal(A[:-1, 1:], coeff)
     np.fill_diagonal(A[1:, :-1], coeff)
     return A.astype(np.float32)
+
 
 def initialize_biomarkers(num_biomarkers, init_value=0.9):
     """Initializes biomarkers with a fixed initial value for the first biomarker."""
@@ -50,3 +76,5 @@ def simulate_progression_over_stages(transition_matrix, stages, y_init):
 def simulate_progression_over_stages2(transition_matrix, stages, y_init):
     """Simulates the progression of biomarker values over multiple stages."""
     return np.array([apply_transition_matrix2(transition_matrix, stage, y_init) for stage in stages])
+
+#%% ODE UTILS
