@@ -51,26 +51,26 @@ print("Y shape:", y_transition.shape)
 print("Stages shape:", stages_transition.shape)
 
 
-mcmc_analysis = MCMCAnalysis(simulator_transition)
-starting_order = np.arange(simulator.X.shape[1]) 
-np.random.shuffle(starting_order)
+# mcmc_analysis = MCMCAnalysis(simulator_transition)
+# starting_order = np.arange(simulator.X.shape[1]) 
+# np.random.shuffle(starting_order)
 
-order, loglike, _ = mcmc_analysis.run_greedy_ascent(starting_order, random_state=2020, prior=None)  # Example with no prior
-orders, _, _, _ = mcmc_analysis.run_mcmc(order, random_state=2020, prior=None)
+# order, loglike, _ = mcmc_analysis.run_greedy_ascent(starting_order, random_state=2020, prior=None)  # Example with no prior
+# orders, _, _, _ = mcmc_analysis.run_mcmc(order, random_state=2020, prior=None)
 
 
-# ### plotting utitlity for later
+### plotting utitlity for later
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-# def plot_biomarker_distribution(X, biomarker, method):
-#     plt.figure(figsize=(10, 5))
-#     plt.hist(X[:, biomarker], alpha=0.5, bins=30, label=f'Biomarker {biomarker}')
-#     plt.title(method)
-#     plt.xlabel('biomarker value')
-#     plt.ylabel('frequency')
-#     plt.legend()
-#     plt.show()
+def plot_biomarker_distribution(X, biomarker, method):
+    plt.figure(figsize=(10, 5))
+    plt.hist(X[:, biomarker], alpha=0.5, bins=30, label=f'Biomarker {biomarker}')
+    plt.title(method)
+    plt.xlabel('biomarker value')
+    plt.ylabel('frequency')
+    plt.legend()
+    plt.show()
 
-# plot_biomarker_distribution(X_sigmoid, 3,"Sigmoid")
-# plot_biomarker_distribution(X_transition, 3,"Transition Matrix")
+plot_biomarker_distribution(X_sigmoid, 3,"Sigmoid")
+plot_biomarker_distribution(X_transition, 3,"Transition Matrix")

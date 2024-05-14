@@ -22,7 +22,18 @@ class BiomarkerSimulation:
         return method_func(stage, add_noise=add_noise, noise_std=noise_std, random_state=random_state)
 
     def generate_patient_sigmoid(self, stage, add_noise=False, noise_std=0.1, random_state=None):
-        """Generate patient biomarkers using inverse sigmoid method."""
+        """
+        Generate patient biomarkers using an inverse sigmoid method.
+
+        Parameters:
+        stage (int): The disease stage of the patient.
+        add_noise (bool): If True, adds Gaussian noise to the biomarkers.
+        noise_std (float): The standard deviation of the Gaussian noise.
+        random_state (int): Seed for the random number generator for reproducibility.
+
+        Returns:
+        np.ndarray: An array of biomarker values for a single patient.
+        """
         random = np.random.RandomState(random_state)
         x = []
         for marker, parameters in self.biomarkers_params.items():
