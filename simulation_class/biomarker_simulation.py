@@ -12,6 +12,7 @@ class BiomarkerSimulation:
         self.methods = {
             'sigmoid_inv': self.generate_patient_sigmoid,
             'transition_matrix': self.generate_patient_transition,
+            'ode': self.generate_patient_ode
         }
 
     def generate_patient(self, stage, add_noise=False, noise_std=0.1, random_state=None):
