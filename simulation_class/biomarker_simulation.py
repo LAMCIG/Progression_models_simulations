@@ -55,6 +55,15 @@ class BiomarkerSimulation:
             y_stage += noise
         y_stage = np.clip(y_stage, 0, 1)
         return y_stage
+    
+    def generate_patient_ode(self, n_biomarkers, n_steps, med_frac, source_rate, all_source_connections):
+        K = random_connectivity_matrix(n_biomarkers, med_frac, source_rate, all_source_connections)
+        x0 = np.zeros(n_biomarkers)
+        x0[0] = 1  # Starting condition
+        t_span = (0, 50)  # Define time span for the simulation
+
+        t, x = solve_ode_system(K, x0, t_span, n_steps)
+        return t, x
 
     def simulate(self):
         """Simulates the progression of biomarkers across multiple patients and stages."""
