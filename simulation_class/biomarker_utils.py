@@ -72,10 +72,6 @@ def apply_transition_matrix2(A, n, y_init, alpha = 10, delta = 0.5):
 
 def simulate_progression_over_stages(transition_matrix, stages, y_init):
     """Simulates the progression of biomarker values over multiple stages."""
-    return np.array([apply_transition_matrix(transition_matrix, stage, y_init) for stage in stages])
-
-def simulate_progression_over_stages2(transition_matrix, stages, y_init):
-    """Simulates the progression of biomarker values over multiple stages."""
     return np.array([apply_transition_matrix2(transition_matrix, stage, y_init) for stage in stages])
 
 #%% ODE UTILS
