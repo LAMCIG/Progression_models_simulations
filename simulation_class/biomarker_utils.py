@@ -110,6 +110,7 @@ def multi_logistic_deriv(t, x, K):
     return (np.eye(len(K)) - np.diag(x)) @ K @ x
 
 def solve_ode_system(K, x0, t_span, n_steps):
+    from scipy.integrate import solve_ivp # this is a little iffy
     t_eval = np.linspace(t_span[0], t_span[1], n_steps)
-    sol = solve_ivp(multi_logistic_deriv, t_span, x0, args=(K,), t_eval=t_eval, method='RK45')
-    return sol.t, sol.y
+    sol = solve_ivp(lambda t, x: multi_logistic_deriv(t, x, K), t_span, x0, t_eval=t_eval)
+    return sol.t, sol.y.T

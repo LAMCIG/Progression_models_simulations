@@ -1,4 +1,4 @@
-from biomarker_utils import sigmoid_inv, generate_transition_matrix, apply_transition_matrix2
+from biomarker_utils import sigmoid_inv, generate_transition_matrix, apply_transition_matrix2, solve_ode_system, multi_logistic_deriv, random_connectivity_matrix
 import numpy as np
 
 class BiomarkerSimulation:
@@ -16,11 +16,10 @@ class BiomarkerSimulation:
         }
 
     def generate_patient(self, stage, add_noise=False, noise_std=0.1, random_state=None):
-        """Generates biomarker data for a patient at a given stage using the specified simulation method."""
-        method_func = self.methods.get(self.method)
-        if not method_func:
-            raise ValueError(f"Method '{self.method}' not implemented.")
-        return method_func(stage, add_noise=add_noise, noise_std=noise_std, random_state=random_state)
+        if self.method == 'sigmoid_inv':
+            return self.generate_patient_sigmoid(stage, add_noise=add_noise, noise_std=noise_std, random_state=random_state)
+        elif self.method == 'transition_matrix':
+            return self.generate_patient_transition(stage, add_noise=add_noise, noise_std=noise_std, random_state=random_state)
 
     def generate_patient_sigmoid(self, stage, add_noise=False, noise_std=0.1, random_state=None):
         """
@@ -57,32 +56,39 @@ class BiomarkerSimulation:
         y_stage = np.clip(y_stage, 0, 1)
         return y_stage
     
-    def generate_patient_ode(self, n_biomarkers, n_steps, med_frac, source_rate, all_source_connections):
-        K = random_connectivity_matrix(n_biomarkers, med_frac, source_rate, all_source_connections)
-        x0 = np.zeros(n_biomarkers)
-        x0[0] = 1  # Starting condition
-        t_span = (0, 50)  # Define time span for the simulation
-
+    def generate_patient_ode(self):
+        # from dict
+        K = self.biomarkers_params['connectivity_matrix']
+        y_init = self.biomarkers_params['y_init']
+        t_span = self.biomarkers_params['t_span']
+        n_steps = self.biomarkers_params['n_steps']
+        x0 = np.zeros(len(y_init))
+        x0[0] = 1  # init condition
         t, x = solve_ode_system(K, x0, t_span, n_steps)
         return t, x
 
-    def simulate(self):
-        """Simulates the progression of biomarkers across multiple patients and stages."""
-        X = []
-        stages = []
-        rs = self.params.get('random_state', 0)
-        for stage, total_number in self.n_patients_stage.items():
-            for _ in range(total_number):
-                patient_biomarkers = self.generate_patient(stage, add_noise=True, noise_std=0.5, random_state=rs)
-                X.append(patient_biomarkers)
-                rs += 1
-                stages.append(stage)
-        X = np.array(X)
-        # Determine health status based on stages
-        n_healthy = sum(v for k, v in self.n_patients_stage.items() if k <= 3)
-        n_diseased = sum(self.n_patients_stage.values()) - n_healthy
-        y = np.array([0] * n_healthy + [1] * n_diseased)
-        self.X = X
-        self.y = y
-        return X, y, np.array(stages)
+    # def simulate(self):
+    #     if self.method in self.methods:
+    #         return self.methods[self.method]()
+    #     else:
+    #         raise ValueError(f"Method '{self.method}' not implemented.")
 
+    def simulate(self):
+        if self.method == 'ode':
+            return self.generate_patient_ode()
+        else:
+            X = []
+            stages = []
+            rs = self.params.get('random_state', 0)
+            for stage, total_number in self.n_patients_stage.items():
+                for _ in range(total_number):
+                    patient_biomarkers = self.generate_patient(stage, add_noise=True, noise_std=0.5, random_state=rs)
+                    X.append(patient_biomarkers)
+                    stages.append(stage)
+            X = np.array(X)
+            n_healthy = sum(v for k, v in self.n_patients_stage.items() if k <= 3)
+            n_diseased = sum(self.n_patients_stage.values()) - n_healthy
+            y = np.array([0] * n_healthy + [1] * n_diseased)
+            self.X = X
+            self.y = y
+            return X, y, np.array(stages)
