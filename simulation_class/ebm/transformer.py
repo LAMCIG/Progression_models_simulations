@@ -16,13 +16,17 @@ class ContinuousDistributionFitter(BaseEstimator, TransformerMixin):
         """
         self.distribution = distribution
         self.dist_params = dist_params
-        self.fitted_distributions = None
+        self.fitted_params = None
+        self.lower_bound = None
+        self.upper_bound = None
 
     def fit(self, X, y=None):
         """
         Fit the distribution to the data.
         """
-        self.fitted_distributions = [self.distribution.fit(X[:, i], **self.dist_params) for i in range(X.shape[1])]
+        self.fitted_params = [self.distribution.fit(X[:, i], **self.dist_params) for i in range(X.shape[1])]
+        self.lower_bound = X.min(axis=0)
+        self.upper_bound = X.max(axis=0)
         return self
 
     def transform(self, X):
@@ -35,14 +39,23 @@ class ContinuousDistributionFitter(BaseEstimator, TransformerMixin):
         Returns:
         np.ndarray: The transformed data.
         """
-        transformed_data = np.zeros_like(X)
-        for i in range(X.shape[1]):
-            dist_params = self.fitted_distributions[i]
-            transformed_data[:, i] = self.distribution(*dist_params).pdf(X[:, i])
-        return transformed_data
+        return np.array([self.distribution(*params).cdf(X[:, i]) for i, params in enumerate(self.fitted_params)]).T
 
     def fit_transform(self, X, y=None):
         """
         Fit the distribution to the data and transform it.
         """
         return self.fit(X, y).transform(X)
+    
+    def cdf(self, x, j):
+        """
+        Compute the cumulative distribution function (CDF) for a specific biomarker.
+
+        Parameters:
+        x (float): The input value.
+        j (int): The biomarker index.
+
+        Returns:
+        float: The CDF value.
+        """
+        return self.distribution(*self.fitted_params[j]).cdf(x)
