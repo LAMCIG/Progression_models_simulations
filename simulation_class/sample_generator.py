@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+from scipy.stats import skewnorm # for controlling size of each patient stage sample size
 class SampleGenerator:
     def __init__(self, canonical_generator, n_patients, add_noise=False, noise_std=0.1, random_state=None, skewness=0):
         self.canonical_generator = canonical_generator
@@ -20,9 +20,17 @@ class SampleGenerator:
         return patients
     
     def _generate_patient_stages(self):
+        """
+        Generates patient stages based on a skewed normal distribution.
+        """
         mean = self.canonical_generator.n_stages / 2
         std_dev = self.canonical_generator.n_stages / 4
-        stages = np.clip(self.random_state.normal(loc=mean, scale=std_dev, size=self.n_patients), 0, self.canonical_generator.n_stages - 1).astype(int)
+        
+        # skewnorm used to generate a skewed normal distribution
+        skew_param = self.skewness  # recall: positive values skew right, negative values skew left
+        skewed_stages = skewnorm.rvs(a=skew_param, loc=mean, scale=std_dev, size=self.n_patients, random_state=self.random_state)
+        stages = np.clip(skewed_stages, 0, self.canonical_generator.n_stages - 1).astype(int)
+        
         return stages
 
     def _generate_patient_biomarkers(self, stage):
