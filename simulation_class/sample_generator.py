@@ -67,3 +67,32 @@ class SampleGenerator:
         plt.title(f'Distribution of Biomarker {biomarker_index + 1}')
         plt.legend()
         plt.show()
+        
+    def plot_patient_biomarkers(self, patient_index):
+        """
+        Plots the biomarker progression for all stages and superimposes the biomarker values of a specific patient.
+
+        Parameters:
+        patient_index (int): The index of the patient in the sample whose biomarker values will be plotted.
+        """
+        if patient_index >= self.n_patients:
+            raise ValueError(f"Patient index {patient_index} is out of range. There are only {self.n_patients} patients.")
+        
+        patient_stage, patient_biomarkers = self.patient_samples[patient_index]
+
+        for biomarker in range(self.canonical_generator.n_biomarkers):
+            plt.plot(np.arange(self.canonical_generator.n_stages), 
+                     [self.canonical_generator.model_predict(stage, biomarker) for stage in range(self.canonical_generator.n_stages)], 
+                     label=f'Biomarker {biomarker + 1}', alpha=0.5)
+        
+        plt.scatter([patient_stage] * self.canonical_generator.n_biomarkers, 
+                    patient_biomarkers, 
+                    color='red', 
+                    zorder=5, 
+                    label=f'Patient {patient_index} Biomarkers')
+        
+        plt.xlabel('Disease Stage')
+        plt.ylabel('Biomarker Value')
+        plt.title('Biomarker Progression with Patient Biomarkers')
+        plt.legend()
+        plt.show()

@@ -52,7 +52,7 @@ class CanonicalGenerator:
         return self.model[biomarker][stage]
     
     def plot_disease_progression(self):
-        plt.figure(figsize=(10, 6))
+        plt.figure()
         for biomarker in range(self.n_biomarkers):
             plt.plot(range(self.n_stages), self.model[biomarker], label=f'Biomarker {biomarker + 1}')
         plt.xlabel('Disease Stage')
