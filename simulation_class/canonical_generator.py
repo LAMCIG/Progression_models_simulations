@@ -1,5 +1,3 @@
-# canonical_generator.py
-
 import numpy as np
 import matplotlib.pyplot as plt
 from biomarker_utils import generate_transition_matrix, apply_transition_matrix2, solve_ode_system
@@ -20,7 +18,7 @@ class CanonicalGenerator:
         elif self.model_type == 'ode':
             return self._generate_ode_model()
         else:
-            raise ValueError(f"Unsupported model type: {self.model_type}")
+            raise ValueError(f"Model does not exist: {self.model_type}")
     
     def _generate_sigmoid_model(self):
         def sigmoid(stage, s, c):

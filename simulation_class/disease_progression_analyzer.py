@@ -11,7 +11,7 @@ class DiseaseProgressionAnalyzer:
             raise ValueError(f"Unsupported analysis type: {analysis_type}")
     
     def _run_mcmc_analysis(self):
-        # TODO: implement mcmc
+        # TODO: reintegrate mcmc
         pass
     
     def spearman_correlation(self, order, ideal_order):
