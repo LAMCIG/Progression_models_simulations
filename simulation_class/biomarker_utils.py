@@ -51,23 +51,21 @@ def apply_transition_matrix(A, n, y_init):
         y = np.clip(A @ y, 0, 1)
     return 1 - y
 
-def softplus(x): # added in to smooth the biomarker curves
-    return np.log(1.0+np.exp(x))
+def softplus(x):
+    """Softplus activation function."""
+    return np.log(1.0 + np.exp(x))
 
-def apply_transition_matrix2(A, n, y_init, alpha = 10, delta = 0.5):
-
-    y = 1 - y_init 
-    if(len(np.shape(n)) == 0):
-        y_out = np.clip(fractional_matrix_power(A,n)@y,0,1)
-      
+def apply_transition_matrix2(A, stages, y_init, alpha=10, delta=0.5):
+    """Applies the transition matrix to simulate biomarker progression for n stages."""
+    y = 1 - y_init
+    if len(np.shape(stages)) == 0:
+        y_out = np.clip(fractional_matrix_power(A, stages) @ y, 0, 1)
     else:
-        y_out = np.full([np.shape(y)[0],np.shape(n)[0]],1.0)
-        for s,j in zip(n,range(len(n))):
-            y_out[:,j] = np.clip(fractional_matrix_power(A,s)@y,0,1)
-    y = 1 - y_out   
-    
-    y = softplus(alpha*(y-delta)) / softplus(alpha*(1.0-delta))
-              
+        y_out = np.full((np.shape(y)[0], len(stages)), 1.0)
+        for s, j in zip(stages, range(len(stages))):
+            y_out[:, j] = np.clip(fractional_matrix_power(A, s) @ y, 0, 1)
+    y = 1 - y_out
+    y = softplus(alpha * (y - delta)) / softplus(alpha * (1.0 - delta))
     return y
 
 def simulate_progression_over_stages(transition_matrix, stages, y_init):

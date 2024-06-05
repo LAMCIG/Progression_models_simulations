@@ -1,5 +1,5 @@
 import numpy as np
-import EBMAnalyzer
+from .EBMAnalyzer import EBMAnalyzer
 import scipy.stats as stats
 class DiseaseProgressionAnalyzer:
     def __init__(self, patient_samples):
@@ -30,3 +30,12 @@ class DiseaseProgressionAnalyzer:
             print(f"Spearman's rho values: {rho_values}")
         
         return orders, rho, loglike, update_iters, probas
+    
+    def print_orders(self, orders, num_orders=10):
+        ebm_analyzer = EBMAnalyzer(self.patient_samples)
+        ebm_analyzer.print_orders(orders, num_orders)
+
+    def spearman_correlation(self, orders, true_order):
+        ebm_analyzer = EBMAnalyzer(self.patient_samples)
+        return ebm_analyzer.spearman_correlation(orders, true_order)
+
