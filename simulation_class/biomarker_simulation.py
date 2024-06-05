@@ -108,7 +108,6 @@ class BiomarkerSimulation:
         if self.X is None or self.stages is None:
             raise ValueError("Simulation data not available. Run simulate() first.")
         
-        plt.figure(figsize=(12, 8))
         for i in range(self.X.shape[1]):
             plt.plot(self.stages, self.X[:, i], label=f'Biomarker {i+1}')
         plt.xlabel('Stage')
@@ -121,7 +120,6 @@ class BiomarkerSimulation:
         if self.X is None or self.stages is None:
             raise ValueError("Simulation data not available. Run simulate() first.")
         
-        plt.figure(figsize=(12, 8))
         for i in range(self.X.shape[1]):
             plt.plot(self.stages, self.X[:, i], label=f'Biomarker {i+1}', alpha=0.3)
         plt.scatter(self.stages, self.X[:, 0], label='Patient Stages', color='red', s=10)

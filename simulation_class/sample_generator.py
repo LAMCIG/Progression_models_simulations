@@ -51,14 +51,24 @@ class SampleGenerator:
         plt.title('Histogram of Patient Stages')
         plt.show()
 
-    def plot_biomarker_distribution(self, biomarker_index, threshold=0.5):
+    def plot_biomarker_distribution(self, biomarker_index, healthy_stage_threshold=3):
+        """
+        Plots the distribution of a specific biomarker for healthy and unhealthy patients.
+        
+        Parameters:
+        biomarker_index (int): Index of the biomarker to plot.
+        healthy_stage_threshold (int): Stage threshold below which patients are considered healthy.
+        """
+        # extract biomarker values and stages from patient samples
         biomarkers = np.array([sample[1] for sample in self.patient_samples])
         stages = np.array([sample[0] for sample in self.patient_samples])
         biomarker_values = biomarkers[:, biomarker_index]
 
-        healthy = biomarker_values[stages < threshold * self.canonical_generator.n_stages]
-        unhealthy = biomarker_values[stages >= threshold * self.canonical_generator.n_stages]
+        # define health status based on stage: stages <= healthy_stage_threshold are considered healthy, > healthy_stage_threshold are diseased
+        healthy = biomarker_values[stages <= healthy_stage_threshold]
+        unhealthy = biomarker_values[stages > healthy_stage_threshold]
 
+        # plot histogram for all, healthy, and unhealthy patients
         bins = plt.hist(biomarker_values, alpha=0.1, label='all', bins=20)
         plt.hist(healthy, bins=bins[1], alpha=0.5, label='healthy')
         plt.hist(unhealthy, bins=bins[1], alpha=0.5, label='unhealthy')
@@ -67,6 +77,7 @@ class SampleGenerator:
         plt.title(f'Distribution of Biomarker {biomarker_index + 1}')
         plt.legend()
         plt.show()
+
         
     def plot_patient_biomarkers(self, patient_index):
         """
