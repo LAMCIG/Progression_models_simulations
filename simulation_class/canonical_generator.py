@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from biomarker_utils import generate_transition_matrix, apply_transition_matrix2, solve_ode_system
+from .biomarker_utils import generate_transition_matrix, apply_transition_matrix2, solve_ode_system, simulate_progression_over_stages, initialize_biomarkers
 
 class CanonicalGenerator:
     def __init__(self, n_biomarkers, n_stages, model_type='sigmoid', biomarkers_params=None):
@@ -32,15 +32,16 @@ class CanonicalGenerator:
         return model
     
     def _generate_transition_matrix_model(self):
-        model = {}
-        transition_matrix = generate_transition_matrix(self.n_biomarkers, self.biomarkers_params.get('coeff', 1e-1))
-        for biomarker in range(self.n_biomarkers):
-            model[biomarker] = apply_transition_matrix2(transition_matrix, range(self.n_stages), np.ones(self.n_biomarkers))
+        coeff = self.biomarkers_params.get('coeff', 1e-1)
+        transition_matrix = generate_transition_matrix(self.n_biomarkers, coeff)
+        y_init = initialize_biomarkers(self.n_biomarkers)
+        stages = np.arange(self.n_stages)
+        model = simulate_progression_over_stages(transition_matrix, stages, y_init)
         return model
     
     def _generate_ode_model(self):
         def ode_model(stage, rate):
-            return np.exp(-rate * stage)
+            return np.exp(-rate * stage) # why am I doing exp?
         
         model = {}
         for biomarker in range(self.n_biomarkers):

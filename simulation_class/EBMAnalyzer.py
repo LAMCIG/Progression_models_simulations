@@ -1,7 +1,7 @@
-from ebm.probability import log_distributions
-from ebm.mcmc import greedy_ascent, mcmc
-from ebm.likelihood import EventProbabilities
-from ebm.transformer import ContinuousDistributionFitter
+from .ebm.probability import log_distributions
+from .ebm.mcmc import greedy_ascent, mcmc
+from .ebm.likelihood import EventProbabilities
+from .ebm.transformer import ContinuousDistributionFitter
 from scipy.stats import norm, spearmanr
 import numpy as np
 

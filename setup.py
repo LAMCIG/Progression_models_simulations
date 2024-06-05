@@ -1,5 +1,4 @@
 from pathlib import Path
-
 from setuptools import setup, find_packages
 
 # automatically detect the lib name
@@ -19,7 +18,7 @@ with open('requirements.txt', encoding='utf-8') as file:
 setup(
     name=name,
     packages=find_packages(include=(name,)),
-    descriprion='A collection of tools for deep learning experiments',
+    description='A collection of tools for deep learning experiments',
     install_requires=requirements,
     # OPTIONAL: uncomment if needed
     # python_requires='>=3.6',
