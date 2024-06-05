@@ -38,8 +38,9 @@ class EBMAnalyzer:
             return None, None, loglike, update_iters, probas
 
         # compute spearman's rho for the initial and first mcmc order
+        # TODO: swap orders[0] for np.argmax(loglike)
         ideal_order = np.arange(self.X.shape[1])
-        rho, _ = spearmanr(ideal_order, orders[0])
+        rho, _ = spearmanr(ideal_order, orders[np.argmax(loglike)])
 
         return orders[:10], rho, loglike, update_iters, probas
 
