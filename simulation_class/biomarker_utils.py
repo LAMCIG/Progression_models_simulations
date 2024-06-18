@@ -74,30 +74,43 @@ def simulate_progression_over_stages(transition_matrix, stages, y_init):
 
 #%% ODE UTILS
 
-def random_connectivity_matrix(n, med_frac=0.1, source_rate=0.1, all_source_connections=False):
+def random_connectivity_matrix(n, med_frac, source_rate, all_source_connections):
     A = np.random.rand(n, n)
-    A = A.T @ A
-    A -= np.diag(np.diag(A))
-    K = np.copy(A)
-
+    A = np.dot(A.T, A)
+    np.fill_diagonal(A, 0)
+    K = np.zeros((n, n))
+    K = A.copy()
+    
     for i in range(n):
-        local_threshold = min(med_frac * np.median(A[i, 1:]), np.max(A[i, 1:]) * 0.99)
-        indices = A[i, 1:] < local_threshold
-        indices = np.insert(indices, 0, False)
-        K[i, indices] = 0
-        K[indices, i] = 0
+        loc_thresh = min(med_frac * np.median(A[i, 1:]), max(A[i, 1:] * 0.99))
+        ind = np.where(A[i, 1:] < loc_thresh)[0] + 1
+        K[i, ind] = 0
+        K[ind, i] = 0
 
-    K /= np.max(K)
+    S = np.sum(K > 0, axis=0)
+    for i in range(n):
+        if S[i] == 0 or (i == 1 and S[i] < 2):
+            if i != 1:
+                ind = np.argmax(A[i, 1:]) + 1
+                K[i, ind] = A[i, ind]
+                K[ind, i] = A[ind, i]
+            else:
+                ind = np.argmax(A[i, 2:]) + 2
+                K[i, ind] = A[i, ind]
+                K[ind, i] = A[ind, i]
+
+    K = K / np.max(K)
+    
     if all_source_connections:
         K[0, :] = source_rate
         K[:, 0] = source_rate
     else:
-        K[0, :] = 0.0
-        K[:, 0] = 0.0
+        K[0, :] = 0
+        K[:, 0] = 0
 
-    K[1, 0] = source_rate
     K[0, 1] = source_rate
-
+    K[1, 0] = source_rate
+    
     return K
 
 def multi_logistic_deriv(t, x, K):
