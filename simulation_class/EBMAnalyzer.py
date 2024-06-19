@@ -37,7 +37,8 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020)
 
         self.orders = orders if len(orders) > 0 else [starting_order]
-        self.rho, _ = spearmanr(np.arange(X.shape[1]), orders[0])
+        ideal_order = np.arange(X.shape[1])
+        self.rho, _ = spearmanr(ideal_order, self.orders[np.argmax(loglike)])
         self.loglike = loglike
         self.update_iters = update_iters
         self.probas = probas
