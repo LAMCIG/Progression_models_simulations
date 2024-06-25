@@ -78,3 +78,15 @@ def log_distributions(X, y, point_proba=False, *, X_test=None, y_test=None, norm
                 log_p_not_e[i, j] = np.log(np.clip(p_right - p_left, eps, 1 - eps))
     
     return log_p_e, log_p_not_e
+
+def predict_stage(event_order, log_p_e, log_p_not_e): # from anvars old code
+    likelihood = []
+    for k in range(len(event_order)):
+        likelihood.append(log_p_e[:, event_order[k]]- log_p_not_e[:, event_order[k]]) 
+    likelihood = np.array(likelihood)
+    
+    # conversion from log likelihood --> probablility
+    likelihood = np.exp(likelihood)
+    likelihood /= likelihood.sum(axis=0, keepdims=True)
+    
+    return likelihood
