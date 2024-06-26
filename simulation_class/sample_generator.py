@@ -23,19 +23,19 @@ class SampleGenerator:
         """
         Generates patient stages based on a skewed normal distribution.
         """
-        mean = self.canonical_generator.n_stages / 2
-        std_dev = self.canonical_generator.n_stages / 4
+        mean = self.canonical_generator.n_biomarker_stages / 2
+        std_dev = self.canonical_generator.n_biomarker_stages / 4
         
         # skewnorm used to generate a skewed normal distribution
         skew_param = self.skewness  # recall: positive values skew right, negative values skew left
         skewed_stages = skewnorm.rvs(a=skew_param, loc=mean, scale=std_dev, size=self.n_patients, random_state=self.random_state)
-        stages = np.clip(skewed_stages, 0, self.canonical_generator.n_stages - 1).astype(int)
+        stages = np.clip(skewed_stages, 0, self.canonical_generator.n_biomarker_stages - 1).astype(int)
         
         return stages
 
     def _generate_patient_biomarkers(self, stage):
         biomarkers = []
-        for biomarker in range(self.canonical_generator.n_biomarkers):
+        for biomarker in range(self.canonical_generator.n_biomarker_stages):
             value = self.canonical_generator.model_predict(stage, biomarker)
             if self.add_noise:
                 value += self.random_state.normal(0, self.noise_std)
@@ -45,7 +45,7 @@ class SampleGenerator:
     
     def plot_stage_histogram(self):
         stages = [sample[0] for sample in self.patient_samples]
-        plt.hist(stages, bins=range(self.canonical_generator.n_stages + 1), edgecolor='k')
+        plt.hist(stages, bins=range(self.canonical_generator.n_biomarker_stages + 1), edgecolor='k')
         plt.xlabel('Disease Stage')
         plt.ylabel('Number of Patients')
         plt.title('Histogram of Patient Stages')
@@ -91,12 +91,12 @@ class SampleGenerator:
         
         patient_stage, patient_biomarkers = self.patient_samples[patient_index]
 
-        for biomarker in range(self.canonical_generator.n_biomarkers):
-            plt.plot(np.arange(self.canonical_generator.n_stages), 
-                     [self.canonical_generator.model_predict(stage, biomarker) for stage in range(self.canonical_generator.n_stages)], 
+        for biomarker in range(self.canonical_generator.n_biomarker_stages):
+            plt.plot(np.arange(self.canonical_generator.n_biomarker_stages), 
+                     [self.canonical_generator.model_predict(stage, biomarker) for stage in range(self.canonical_generator.n_biomarker_stages)], 
                      label=f'Biomarker {biomarker + 1}', alpha=0.5)
         
-        plt.scatter([patient_stage] * self.canonical_generator.n_biomarkers, 
+        plt.scatter([patient_stage] * self.canonical_generator.n_biomarker_stages, 
                     patient_biomarkers, 
                     color='red', 
                     zorder=5, 
