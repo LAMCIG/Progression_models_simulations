@@ -1,6 +1,6 @@
 import numpy as np
 from .transformer import ContinuousDistributionFitter
-from scipy.stats import norm, uniform
+from scipy.stats import norm, uniform # TODO: add more distributions
 
 def fit_distributions(X, y, normalize=False, distribution=norm, **dist_params):
     """Fit distribution p(x|E), p(x|~E) as a mixture of Gaussian and Uniform, see Fonteijn 
