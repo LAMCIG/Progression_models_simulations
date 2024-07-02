@@ -19,8 +19,9 @@ class DiseaseProgressionAnalyzer:
         if analysis_type == 'ebm':
             self.ebm_analyzer = EBMAnalyzer()
             self.ebm_analyzer.fit(self.X, self.y)
-            orders, rho, loglike, update_iters, probas = self.ebm_analyzer.transform(self.X)
-            return orders, rho, loglike, update_iters, probas
+             # im not a fan of the variable name but it will do
+            likelihood_matrix, orders, rho, loglike, update_iters, probas = self.ebm_analyzer.transform(self.X)
+            return likelihood_matrix, orders, rho, loglike, update_iters, probas
         else:
             raise ValueError(f"Unsupported analysis type: {analysis_type}")
 
