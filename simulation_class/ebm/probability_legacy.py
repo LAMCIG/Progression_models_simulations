@@ -16,8 +16,10 @@ def fit_distributions(X, y, normalize=False):
     std = X[y==0, ...].std(axis=0)
     p_not_e = [norm(loc, s) for loc, s in zip(avg, std)]
 
-    left_min = X.min(axis=0)
-    right_max = avg.copy()
+    # left_min = X.min(axis=0)
+    left_min = X[y==1, ...].min(axis=0)
+    right_max = X[y==1, ...].max(axis=0)# avg.copy()
+    
     p_e = [uniform(m1, m2-m1) for m1, m2 in zip(left_min, right_max)]
     return p_e, p_not_e, left_min, right_max
 

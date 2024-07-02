@@ -31,6 +31,8 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      n_iter=10_000, 
                                                      order=starting_order, 
                                                      random_state=2020)
+        
+        print(f"Greedy Ascent Result: {order}")
 
         orders, loglike, update_iters, probas = mcmc(self.log_p_e, 
                                                      self.log_p_not_e, 
