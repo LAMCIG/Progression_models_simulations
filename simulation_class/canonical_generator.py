@@ -7,7 +7,19 @@ from .ode_generator import ODEGenerator
 class CanonicalGenerator:
     def __init__(self, n_biomarker_stages: int, model_type: str = 'sigmoid', biomarkers_params: Dict = None):
         """
-        Initializes the CanonicalGenerator with the specified parameters.
+        Initializes the CanonicalGenerator with the specified parameters. Parameters will create the biomarker progressions
+        and then store them in model_values matrix and biomarker_values. model_values is the higher resolution representation
+        of the biomarkers. biomarker_values are strictly the value of the biomarkers only at discrete stages, this is used as a
+        lookup matrix for patient generation.
+        
+        Parameters:
+            n_biomarker_stages (int): The number of stages/biomarkers to simulate.
+            model_type (str): The model type used for generating biomarkers progressions. Ex. "sigmoid", "transition_matrix", "ode".
+            biomarker_params (Dict):
+        
+        Attributes:
+            model_values (np.ndarray): High-resolution representation of biomarker progressions.
+            biomarker_values (np.ndarray): Discrete stage values for biomarker values used in patient generation.
         """
         # User-defined member variables
         self.n_biomarker_stages = n_biomarker_stages
@@ -18,7 +30,13 @@ class CanonicalGenerator:
         self.model_values = self._generate_model()
         self.biomarker_values = self._get_discrete_stage_values()
 
-    def _generate_model(self) -> np.array:
+    def _generate_model(self) -> np.ndarray:
+        """
+        Calls the appropriate model generation function depending on `model_type` selected.
+        
+        Returns:
+            np.ndarray: M-by-N matrix where each M is a different biomarker, and N is the value of a biomarker at an arbitrary time point
+        """
         if self.model_type == 'sigmoid':
             return self._generate_sigmoid_model()
         elif self.model_type == 'transition_matrix':
@@ -49,9 +67,7 @@ class CanonicalGenerator:
         Generates a transition matrix model for the biomarkers.
 
         Returns:
-        --------
-        np.ndarray
-            The generated transition matrix model.
+            The generated transition matrix model as an np.ndarray
         """
         coeff = self.biomarkers_params.get('coeff')
         timespan = np.arange(40)
@@ -62,6 +78,8 @@ class CanonicalGenerator:
         model_values = simulate_progression_over_stages(transition_matrix, timespan, y_init)
         return model_values.T[1:]
     
+    # TODO: make mult_logistic_sym a parameter
+    # TODO: add param grid for initial conditions
     def _generate_ode_model(self) -> np.ndarray:
         ode_generator = ODEGenerator(self.n_biomarker_stages)
         t, x = ode_generator.multi_logistic_sym_force()
@@ -69,6 +87,10 @@ class CanonicalGenerator:
         return x # x is just the model_value at each timepoint t
     
     def _get_discrete_stage_values(self) -> np.ndarray:
+        """
+        Converts `self.model_values` -> `self.biomarker values` (nd.array) 
+        by taking the value of each biomarker at each stage.
+        """
         if self.model_type == 'ode':
             return np.array([np.interp(np.arange(self.n_biomarker_stages), self.time_points, self.model_values[i]) for i in range(len(self.model_values))])
         else:
@@ -78,6 +100,9 @@ class CanonicalGenerator:
         return self.biomarker_values[biomarker][stage]
 
     def plot_disease_progression(self):
+        """
+        Plots all biomarker progressions with stages visible.
+        """
         plt.figure()
         for marker in self.model_values:
             plt.plot(marker)
