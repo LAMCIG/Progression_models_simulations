@@ -3,6 +3,20 @@ import matplotlib.pyplot as plt
 from typing import List, Tuple
 
 class SampleGenerator:
+    """
+    Sample generator takes in a model (CanonicalGenerator), and paramaters for generating a patient sample.
+    
+    Parameters:
+        canonical_generator (CanonicalGenerator): Pass in a canonical generator after it has been instantiated.
+        n_patients (int): Number of patient in your sample.
+        add_noise (bool): Adds noise if True.
+        noise_std (float):
+        random_state (int):
+        skewness (float):
+        
+    Attributes:
+        patient_samples ():
+    """
     def __init__(self, canonical_generator, n_patients: int, add_noise: bool = True, noise_std: float = 0.1, random_state: int = None, skewness: float = -1):
         self.canonical_generator = canonical_generator
         self.n_patients = n_patients
@@ -33,6 +47,8 @@ class SampleGenerator:
             stages = np.sort(stages) if self.skewness < 0 else np.sort(stages)[::-1]
         return stages
 
+    ### Plotting methods
+
     def plot_stage_histogram(self) -> None:
         stages = [sample[0] for sample in self.patient_samples]
         plt.hist(stages, bins=self.canonical_generator.n_biomarker_stages, alpha=0.5)
@@ -41,7 +57,7 @@ class SampleGenerator:
         plt.title('Patient Stage Distribution')
         plt.show()
 
-    def plot_biomarker_distribution(self, biomarker_index: int, healthy_stage_threshold: float = 0.5) -> None:
+    def plot_biomarker_distribution(self, biomarker_index: int, healthy_stage_threshold: float = 2) -> None:
         biomarkers = np.array([sample[1][biomarker_index] for sample in self.patient_samples])
         stages = np.array([sample[0] for sample in self.patient_samples])
         
