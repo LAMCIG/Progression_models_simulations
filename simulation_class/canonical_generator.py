@@ -9,7 +9,7 @@ class CanonicalGenerator:
         """
         Initializes the CanonicalGenerator with the specified parameters. Parameters will create the biomarker progressions
         and then store them in model_values matrix and biomarker_values. model_values is the higher resolution representation
-        of the biomarkers. biomarker_values are strictly the value of the biomarkers only at discrete stages, this is used as a
+        of the biomarkers. `biomarker_values` are strictly the value of the biomarkers only at discrete stages, this is used as a
         lookup matrix for patient generation.
         
         Parameters:
@@ -26,7 +26,7 @@ class CanonicalGenerator:
         self.model_type = model_type
         self.biomarkers_params = biomarkers_params
         
-        # Output variables
+        # Attributes
         self.model_values = self._generate_model()
         self.biomarker_values = self._get_discrete_stage_values()
 
@@ -78,13 +78,35 @@ class CanonicalGenerator:
         model_values = simulate_progression_over_stages(transition_matrix, timespan, y_init)
         return model_values.T[1:]
     
+
+    
     # TODO: make mult_logistic_sym a parameter
     # TODO: add param grid for initial conditions
     def _generate_ode_model(self) -> np.ndarray:
+        def _biomarker_sort(model_values: np.ndarray, threshold: float = 0.99) -> np.ndarray:
+            """
+            WARNING! this is a temporary solution for the out of order biomarker generation for the ODE model.
+            Reorders biomarkers based on which marker reaches top values first.
+            """
+            markers_sorted = 0
+            column_idx = 0
+            while markers_sorted < model_values.shape[0]:
+                values = model_values[markers_sorted:, column_idx]
+                if column_idx == model_values.shape[1]-1:
+                    return model_values
+                if np.max(values) > threshold:
+                    max_index = np.where(model_values[:,column_idx] == np.max(values))
+                    model_values[max_index, :], model_values[markers_sorted, :] = model_values[markers_sorted, :], model_values[max_index, :]
+                    markers_sorted += 1
+                column_idx += 1
+            return model_values
         ode_generator = ODEGenerator(self.n_biomarker_stages)
         t, x = ode_generator.multi_logistic_sym_force()
         self.time_points = t
+        x = _biomarker_sort(x) # TODO: REMOVE LINE, once model is fixed
         return x # x is just the model_value at each timepoint t
+    
+
     
     def _get_discrete_stage_values(self) -> np.ndarray:
         """
