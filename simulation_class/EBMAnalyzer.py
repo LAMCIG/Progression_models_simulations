@@ -52,21 +52,20 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
-        likelihood_matrix = predict_stage(self.orders[np.argmax(self.loglike)], self.log_p_e, self.log_p_not_e)
-        return likelihood_matrix, self.orders, self.rho, self.loglike, self.update_iters, self.probas
+        best_order = self.orders[np.argmax(self.loglike)]
+        likelihood_matrix = predict_stage(best_order, self.log_p_e, self.log_p_not_e)
+        return likelihood_matrix
     
     def get_params(self):
         return {
             'orders': self.orders,
             'loglike': self.loglike,
             'update_iters': self.update_iters,
-            'probas': self.probas
+            'probas': self.probas,
+            'rho': self.rho
         }
 
     def print_orders(self, num_orders=10):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
         print(f"First {num_orders} MCMC sampled orders:", self.orders[:num_orders])
-
-    def spearman_correlation(self):
-        return self.rho

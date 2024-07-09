@@ -1,6 +1,27 @@
 import numpy as np
 from .transformer import ContinuousDistributionFitter
-from scipy.stats import norm, uniform # TODO: add more distributions
+from scipy.stats import norm, uniform, expon, lognorm # <-- add more distributions here
+
+# TODO: docstrings
+def fit_distribution(data, dist_name = "norm"):
+    dist_dict = {
+        "norm": norm,
+        "uniform": uniform,
+        "expon": expon,
+        "lognorm": lognorm,
+      # "'example string': example scipy distribution"
+      
+      # You may add which ever distribution you would like to use here,
+      # DO NOT FORGET TO IMPORT YOUR DISTRIBUTION FROM SCIPY.STATS  
+    }
+    
+    if dist_name not in dist_dict:
+        raise ValueError(f"Unsupported distribution type: {dist_name}\nPlease, make sure your desired distribution has been imported.")
+    dist = dist_dict[dist_name]
+    params = dist.fit(data)
+    return dist, params
+    
+    
 
 def fit_distributions(X, y, normalize=False, distribution=norm, **dist_params):
     """Fit distribution p(x|E), p(x|~E) as a mixture of Gaussian and Uniform, see Fonteijn 
