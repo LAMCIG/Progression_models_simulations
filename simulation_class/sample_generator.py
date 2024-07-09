@@ -10,9 +10,9 @@ class SampleGenerator:
         canonical_generator (CanonicalGenerator): Pass in a canonical generator after it has been instantiated.
         n_patients (int): Number of patient in your sample.
         add_noise (bool): Adds noise if True.
-        noise_std (float):
-        random_state (int):
-        skewness (float):
+        noise_std (float): The standard deviation of the noise.
+        random_state (int): Set random state for reproducible psuedo-random results.
+        skewness (float): Skewness parameter for the sample distribution.
         
     Attributes:
         patient_samples ():
@@ -35,7 +35,7 @@ class SampleGenerator:
             biomarkers = self.canonical_generator.biomarker_values[:, stage]
             if self.add_noise:
                 noise = random.normal(0, self.noise_std, biomarkers.shape)
-                biomarkers = np.clip(biomarkers + noise, 0, 1)
+                biomarkers = np.clip(biomarkers + noise, 0, 1) # ensures adding noise only produces values in range [0,1]
             patient_samples.append((stage, biomarkers))
         return patient_samples
     
@@ -47,7 +47,9 @@ class SampleGenerator:
             stages = np.sort(stages) if self.skewness < 0 else np.sort(stages)[::-1]
         return stages
 
-    ### Plotting methods
+
+    #%% Plotting methods
+
 
     def plot_stage_histogram(self) -> None:
         stages = [sample[0] for sample in self.patient_samples]
