@@ -21,7 +21,17 @@ def fit_distribution(data, dist_name = "norm"):
     params = dist.fit(data)
     return dist, params
     
-    
+# def log_distributions(X, y, point_proba=False, distribution='norm', **dist_params):
+#     event_data = X[y == 1]
+#     non_event_data = X[y == 0]
+
+#     event_dist, event_params = fit_distribution(event_data.flatten(), distribution)
+#     non_event_dist, non_event_params = fit_distribution(non_event_data.flatten(), distribution)
+
+#     log_p_E = event_dist.logpdf(X, *event_params[:-2], loc=event_params[-2], scale=event_params[-1])
+#     log_p_not_E = non_event_dist.logpdf(X, *non_event_params[:-2], loc=non_event_params[-2], scale=non_event_params[-1])
+
+#     return log_p_E, log_p_not_E
 
 def fit_distributions(X, y, normalize=False, distribution=norm, **dist_params):
     """Fit distribution p(x|E), p(x|~E) as a mixture of Gaussian and Uniform, see Fonteijn 
