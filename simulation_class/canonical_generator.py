@@ -28,14 +28,14 @@ class CanonicalGenerator:
         
         # Attributes
         self.model_values = self._generate_model()
-        self.biomarker_values = self._get_discrete_stage_values()
+        self.biomarker_values = self._get_discrete_stage_values() # TODO: refactor to `stage_values`
 
     def _generate_model(self) -> np.ndarray:
         """
         Calls the appropriate model generation function depending on `model_type` selected.
         
         Returns:
-            np.ndarray: M-by-N matrix where each M is a different biomarker, and N is the value of a biomarker at an arbitrary time point
+            np.ndarray: M-by-N matrix where each row is a different biomarker, and column is the value of a biomarker at an arbitrary time point
         """
         if self.model_type == 'sigmoid':
             return self._generate_sigmoid_model()
@@ -108,7 +108,7 @@ class CanonicalGenerator:
     
 
     
-    def _get_discrete_stage_values(self) -> np.ndarray:
+    def _get_discrete_stage_values(self) -> np.ndarray: # TODO: refactor into `_get_stage_values`
         """
         Converts `self.model_values` -> `self.biomarker values` (nd.array) 
         by taking the value of each biomarker at each stage.
