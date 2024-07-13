@@ -50,7 +50,7 @@ class CanonicalGenerator:
 
     def _generate_sigmoid_model(self) -> np.ndarray:
         def sigmoid(x, s, c):
-            return 1 / (1 + np.exp(-s * (x - c)))
+            return 1 - 1 / (1 + np.exp(-s * (x - c)))
 
         x = np.linspace(-50, 120, 1000) # arbitrary domain for sigmoid model
         model_values = np.zeros((self.n_biomarker_stages, len(x)))
@@ -83,7 +83,7 @@ class CanonicalGenerator:
     # TODO: make mult_logistic_sym a parameter
     # TODO: add param grid for initial conditions
     def _generate_ode_model(self) -> np.ndarray:
-        def _biomarker_sort(model_values: np.ndarray, threshold: float = 0.99) -> np.ndarray:
+        def _biomarker_sort(model_values: np.ndarray, threshold: float = 0.50) -> np.ndarray:
             """
             WARNING! this is a temporary solution for the out of order biomarker generation for the ODE model.
             Reorders biomarkers based on which marker reaches top values first.

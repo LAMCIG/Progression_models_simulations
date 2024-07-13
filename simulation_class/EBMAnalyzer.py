@@ -40,7 +40,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      n_iter=500_000, 
                                                      random_state=2020)
 
-        self.orders = orders if len(orders) > 0 else [starting_order]
+        self.orders = orders if len(orders) == 0 else [starting_order]
         ideal_order = np.arange(X.shape[1])
         self.rho, _ = spearmanr(ideal_order, self.orders[np.argmax(loglike)])
         self.loglike = loglike
@@ -52,8 +52,8 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
-        best_order = self.orders[np.argmax(self.loglike)]
-        likelihood_matrix = predict_stage(best_order, self.log_p_e, self.log_p_not_e)
+        self.best_order = self.orders[np.argmax(self.loglike)]
+        likelihood_matrix = predict_stage(self.best_order, self.log_p_e, self.log_p_not_e)
         return likelihood_matrix
     
     def get_params(self):
@@ -62,7 +62,8 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             'loglike': self.loglike,
             'update_iters': self.update_iters,
             'probas': self.probas,
-            'rho': self.rho
+            'rho': self.rho,
+            'best_order': self.best_order
         }
 
     def print_orders(self, num_orders=10):

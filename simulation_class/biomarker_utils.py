@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.linalg import fractional_matrix_power
 from scipy.integrate import solve_ivp
+import random
 
 #%% SIGMOID UTILS
 
@@ -71,6 +72,7 @@ def simulate_progression_over_stages(transition_matrix, stages, y_init):
 #%% ODE UTILS
 
 def random_connectivity_matrix(n, med_frac, source_rate, all_source_connections):
+    random.seed(10)
     A = np.random.rand(n, n)
     A = np.dot(A.T, A)
     np.fill_diagonal(A, 0)
