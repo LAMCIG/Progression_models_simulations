@@ -35,7 +35,7 @@ class SampleGenerator:
             biomarkers = self.canonical_generator.biomarker_values[:, stage]
             if self.add_noise:
                 noise = random.normal(0, self.noise_std, biomarkers.shape)
-                biomarkers = np.clip(biomarkers + noise, 0, 1) # ensures adding noise only produces values in range [0,1]
+                biomarkers = np.clip(biomarkers + noise, 0, 1) #### REMOVE THIS # ensures adding noise only produces values in range [0,1]
             patient_samples.append((stage, biomarkers))
         return patient_samples
     
@@ -49,8 +49,6 @@ class SampleGenerator:
 
 
     #%% Plotting methods
-
-
     def plot_stage_histogram(self) -> None:
         stages = [sample[0] for sample in self.patient_samples]
         plt.hist(stages, bins=self.canonical_generator.n_biomarker_stages, alpha=0.5)

@@ -1,21 +1,28 @@
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
-from scipy.stats import norm, spearmanr
+from scipy.stats import norm, spearmanr, kendalltau
 from .ebm.probability import log_distributions, predict_stage
 from .ebm.mcmc import greedy_ascent, mcmc
 from .ebm.likelihood import EventProbabilities
 
 class EBMAnalyzer(BaseEstimator, TransformerMixin):
-    def __init__(self, distribution=norm, **dist_params):
+    def __init__(self, distribution=norm, prior = None, **dist_params):
         self.distribution = distribution
         self.dist_params = dist_params
+        self.prior = prior
+        
+        ## mcmc results
         self.orders = None
-        self.rho = None
         self.loglike = None
         self.update_iters = None
         self.probas = None
         self.log_p_e = None
         self.log_p_not_e = None
+        
+        ## evaluation metrics
+        self.spearman_rho = None
+        self.kendall_tau = None
+        
 
     def fit(self, X, y=None):
         self.log_p_e, self.log_p_not_e = log_distributions(X, y, 
@@ -29,20 +36,31 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         order, loglike, update_iters = greedy_ascent(self.log_p_e, 
                                                      self.log_p_not_e, 
                                                      n_iter=10_000, 
-                                                     order=starting_order, 
-                                                     random_state=2020)
+                                                     order=starting_order,
+                                                     prior = self.prior, 
+                                                     random_state=2020
+                                                     )
         
         print(f"Greedy Ascent Result: {order}")
 
         orders, loglike, update_iters, probas = mcmc(self.log_p_e, 
                                                      self.log_p_not_e, 
                                                      order=order, 
-                                                     n_iter=500_000, 
-                                                     random_state=2020)
+                                                     n_iter=500_000,
+                                                     prior = self.prior,
+                                                     random_state=2020
+                                                     )
 
-        self.orders = orders if len(orders) == 0 else [starting_order]
+        if len(loglike) > 0:
+            best_order_idx = np.argmax(loglike)
+            self.orders = orders
+        else:
+            best_order_idx = 0
+            self.orders = [order]
+        
         ideal_order = np.arange(X.shape[1])
-        self.rho, _ = spearmanr(ideal_order, self.orders[np.argmax(loglike)])
+        self.rho, _ = spearmanr(ideal_order, self.orders[best_order_idx])
+        self.kendall_tau, _ = kendalltau(ideal_order, self.orders[best_order_idx])
         self.loglike = loglike
         self.update_iters = update_iters
         self.probas = probas
@@ -62,9 +80,15 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             'loglike': self.loglike,
             'update_iters': self.update_iters,
             'probas': self.probas,
-            'rho': self.rho,
-            'best_order': self.best_order
+            'best_order': self.best_order,
+            'spearman_rho': self.spearman_rho,
+            'kendall_tau': self.kendall_tau
         }
+        
+    def summary(self):
+        print(f"Best Order: {self.best_order}")
+        print(f"Spearman's Rho: {self.spearman_rho}")
+        print(f"Kendall's Tau: {self.kendall_tau}")
 
     def print_orders(self, num_orders=10):
         if self.orders is None:
