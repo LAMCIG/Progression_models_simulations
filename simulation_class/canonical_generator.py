@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple 
-from .biomarker_utils import generate_transition_matrix, initialize_biomarkers, simulate_progression_over_stages
+from .biomarker_utils import generate_transition_matrix, initialize_biomarkers, simulate_progression_over_stages, Graph, compute_log_prior_from_adjacency
 from .ode_generator import ODEGenerator
 
 class CanonicalGenerator:
@@ -21,12 +21,12 @@ class CanonicalGenerator:
             model_values (np.ndarray): High-resolution representation of biomarker progressions.
             biomarker_values (np.ndarray): Discrete stage values for biomarker values used in patient generation.
         """
-        # User-defined member variables
         self.n_biomarker_stages = n_biomarker_stages
         self.model_type = model_type
         self.biomarkers_params = biomarkers_params
         
         # Attributes
+        self.prior = None
         self.model_values = self._generate_model()
         self.biomarker_values = self._get_discrete_stage_values() # TODO: refactor to `stage_values`
 
@@ -74,6 +74,7 @@ class CanonicalGenerator:
         n_biomarkers = self.n_biomarker_stages + 1 # generate extra to remove later
         
         transition_matrix = generate_transition_matrix(n_biomarkers, coeff)
+        self.prior = compute_log_prior_from_adjacency(transition_matrix)
         y_init = initialize_biomarkers(n_biomarkers)
         model_values = simulate_progression_over_stages(transition_matrix, timespan, y_init)
         return model_values.T[1:]
@@ -101,6 +102,7 @@ class CanonicalGenerator:
                 column_idx += 1
             return model_values
         ode_generator = ODEGenerator(self.n_biomarker_stages)
+        self.prior = ode_generator.get_connectivity_matrix()
         t, x = ode_generator.multi_logistic_sym_force()
         self.time_points = t
         x = _biomarker_sort(x) # TODO: REMOVE LINE, once model is fixed
@@ -120,6 +122,15 @@ class CanonicalGenerator:
     
     def model_predict(self, stage: int, biomarker: int) -> float:
         return self.biomarker_values[biomarker][stage]
+    
+    
+    def get_prior(self) -> np.ndarray:
+        """
+        Gets prior.
+        """
+        return self.prior
+    
+    ## Plotting
 
     def plot_disease_progression(self):
         """

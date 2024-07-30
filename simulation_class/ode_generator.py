@@ -6,6 +6,9 @@ class ODEGenerator:
         self.step = step
         self.n_steps = n_steps
         self.neg_frac = neg_frac
+        
+        # Attribute
+        self.connectivity_matrix = None
 
     def random_connectivity_matrix(self, n, med_frac, source_rate, all_source_connections):
         A = np.random.rand(n, n)
@@ -43,6 +46,7 @@ class ODEGenerator:
         K[0, 1] = source_rate
         K[1, 0] = source_rate
 
+        self.random_connectivity_matrix = K
         return K
 
     def multi_logistic_deriv_force(self, K, f, x):
@@ -77,3 +81,6 @@ class ODEGenerator:
             x[:, i + 1] = x[:, i] + dx_dt * step
 
         return t, x
+    
+    def get_connectivity_matrix(self):
+        return self.connectivity_matrix
