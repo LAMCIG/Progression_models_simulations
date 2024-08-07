@@ -27,6 +27,7 @@ class CanonicalGenerator:
         
         # Attributes
         self.prior = None
+        self.time_points = None
         self.model_values = self._generate_model()
         self.biomarker_values = self._get_discrete_stage_values() # TODO: refactor to `stage_values`
 
@@ -41,12 +42,32 @@ class CanonicalGenerator:
             return self._generate_sigmoid_model()
         elif self.model_type == 'transition_matrix':
             return self._generate_transition_matrix_model()
-        elif self.model_type == 'ode':
+        elif self.model_type == 'logistic':
+            return self._generate_ode_model()
+        elif self.model_type == 'acp':
+            return self._generate_ode_model()
+        elif self.model_type == 'diffusion':
+            return self._generate_ode_model()
+        elif self.model_type == 'reaction_diffusion':
             return self._generate_ode_model()
         # elif self.model_type == 'example':
         #     return self._generate_example_model()
         else:
             raise ValueError(f"Unsupported model type: {self.model_type}")
+        
+    def _biomarker_sort(self, model_values: np.ndarray, threshold: float = 0.50) -> np.ndarray:
+        markers_sorted = 0
+        column_idx = 0
+        while markers_sorted < model_values.shape[0]:
+            values = model_values[markers_sorted:, column_idx]
+            if column_idx == model_values.shape[1]-1:
+                return model_values
+            if np.max(values) > threshold:
+                max_index = np.where(model_values[:,column_idx] == np.max(values))
+                model_values[max_index, :], model_values[markers_sorted, :] = model_values[markers_sorted, :]
+                markers_sorted += 1
+            column_idx += 1
+        return model_values
 
     def _generate_sigmoid_model(self) -> np.ndarray:
         def sigmoid(x, s, c):
@@ -101,24 +122,29 @@ class CanonicalGenerator:
                     markers_sorted += 1
                 column_idx += 1
             return model_values
-        ode_generator = ODEGenerator(self.n_biomarker_stages)
-        self.prior = ode_generator.get_connectivity_matrix()
-        t, x = ode_generator.multi_logistic_sym_force()
+        
+        ode_generator = ODEGenerator(self.n_biomarker_stages, model_type=self.model_type)
+        t, x = ode_generator.generate_model()
         self.time_points = t
-        x = _biomarker_sort(x) # TODO: REMOVE LINE, once model is fixed
+        self.prior = ode_generator.get_connectivity_matrix()
+        x = _biomarker_sort(x)
         return x # x is just the model_value at each timepoint t
     
-
-    
-    def _get_discrete_stage_values(self) -> np.ndarray: # TODO: refactor into `_get_stage_values`
+    def _get_discrete_stage_values(self):
         """
         Converts `self.model_values` -> `self.biomarker values` (nd.array) 
         by taking the value of each biomarker at each stage.
         """
-        if self.model_type == 'ode':
+        if self.model_type in ['logistic']:
+            for i in range(len(self.model_values)):
+                print(f"self.time_points length: {len(self.time_points)}, self.model_values[{i}] length: {len(self.model_values[i])}")
+                if len(self.time_points) != len(self.model_values[i]):
+                    raise ValueError(f"Length mismatch: time_points={len(self.time_points)}, model_values[{i}]={len(self.model_values[i])}")
             return np.array([np.interp(np.arange(self.n_biomarker_stages), self.time_points, self.model_values[i]) for i in range(len(self.model_values))])
         else:
             return self.model_values[:, np.linspace(0, self.model_values.shape[1] - 1, self.n_biomarker_stages, dtype=int)]
+
+
     
     def model_predict(self, stage: int, biomarker: int) -> float:
         return self.biomarker_values[biomarker][stage]
