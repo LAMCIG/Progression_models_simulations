@@ -31,6 +31,10 @@ def greedy_ascent(log_p_E: np.ndarray, log_p_not_E: np.ndarray,
             update_iters.append(i)
         else:
             order[a], order[b] = order[b], order[a]
+            
+        if i % 1000 == 0:  # debug print called every x iters
+            print(f"Iteration {i}: a={a}, b={b}, order={order}, old_loglike={old_loglike}, new_loglike={new_loglike}")    
+        
     return order, loglike, update_iters
 
 
@@ -56,6 +60,10 @@ def mcmc(log_p_E: np.ndarray, log_p_not_E: np.ndarray,
         order[a], order[b] = order[b], order[a]
         new_loglike = model.compute_total_likelihood(order, prior=prior)
         p = np.exp(new_loglike - old_loglike)
+        
+        if i % 100000 == 0:  # debug print called every x iters
+            print(f"Iteration {i}: a={a}, b={b}, order={order}, old_loglike={old_loglike}, new_loglike={new_loglike}, p={p}")
+        
         if p > random.random_sample(): # TODO: check probas validity
             old_loglike = new_loglike
             loglike.append(old_loglike)
@@ -87,5 +95,9 @@ def get_optimal_order(orders: list):
                 best_order.append(reg)
                 break
     best_order = np.array(best_order)  
+    
+    print(f"Order Map: \n{order_map}")
+    print(f"Best Order: {best_order}")
+    
     return order_map, best_order
 
