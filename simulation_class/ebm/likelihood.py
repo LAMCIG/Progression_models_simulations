@@ -15,7 +15,6 @@ class EventProbabilities:
         """Computes likelihood for stage k=0, see Fonteijn, (1), for every subject."""
         return np.sum(self.log_p_not_E, axis=1)
     
-    
     def _subject_likelihood(self, event_order: np.ndarray = None):
         """Computes formula (2) form Fonteijn"""
         likelihood = self._likelihood.copy()
@@ -23,6 +22,11 @@ class EventProbabilities:
             likelihood += self.log_p_E[:, event_order[k]] \
                         - self.log_p_not_E[:, event_order[k]] 
             self.subjects_likelihood += np.exp(likelihood)
+            
+            # if np.any(np.isnan(likelihood)):
+            #     print(f"NaN found in likelihood @ iter: {k}, for event_order: {event_order}")
+            # if np.any(np.isnan(self.subjects_likelihood)):
+            #     print(f"NaN found in subjects_likelihood @ iter: {k}, for event_order: {event_order}")
         # assuming flat prior p(k)
         return self.subjects_likelihood
     
@@ -47,5 +51,13 @@ class EventProbabilities:
         log_prior = 0
         if prior is not None:
             log_prior = self._compute_connectivity_prior(event_order=event_order, path_log_proba_adj=prior)
+            
+        # subject_likelihood = self._subject_likelihood(event_order)
+        # if np.any(np.isnan(subject_likelihood)):
+        #     print(f"NaN found @ subject_likelihood for event_order {event_order}")
+        
+        # total_likelihood = np.sum(np.log(subject_likelihood)) + log_prior
+        # if np.isnan(total_likelihood):
+        #     print(f"NaN found @ total_likelihood for event_order {event_order}")
             
         return np.sum(np.log(self._subject_likelihood(event_order))) + log_prior
