@@ -4,7 +4,7 @@ from scipy.stats import norm, spearmanr, kendalltau
 from .ebm.probability import log_distributions, predict_stage
 from .ebm.mcmc import greedy_ascent, mcmc
 from .ebm.likelihood import EventProbabilities
-
+import matplotlib.pyplot as plt
 class EBMAnalyzer(BaseEstimator, TransformerMixin):
     def __init__(self, distribution=norm, prior = None, **dist_params):
         self.distribution = distribution
@@ -22,9 +22,18 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         ## evaluation metrics
         self.spearman_rho = None
         self.kendall_tau = None
-        
+    
+
+
 
     def fit(self, X, y=None):
+        
+        # validate that X and y contain only finite values
+        if not np.all(np.isfinite(X)):
+            raise ValueError("The data in X contains non-finite values (NaN or Inf).")
+        if y is not None and not np.all(np.isfinite(y)):
+            raise ValueError("The data in y contains non-finite values (NaN or Inf).")
+        
         self.log_p_e, self.log_p_not_e = log_distributions(X, y, 
                                                  point_proba=False, 
                                                  distribution=self.distribution, 
@@ -50,13 +59,24 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      prior = self.prior,
                                                      random_state=2020
                                                      )
-
+        
+        
+        def plot_loglike(loglike):
+            plt.figure(figsize=(10, 6))
+            plt.plot(loglike, label='Log-Likelihood')
+            plt.xlabel('Iterations')
+            plt.ylabel('Log-Likelihood')
+            plt.legend()
+            plt.grid(True)
+            plt.show()
+        plot_loglike(loglike)
+        
         if len(loglike) > 0:
             best_order_idx = np.argmax(loglike)
             self.orders = orders
-        else:
+        else: # contingency for when no orders are generated
             best_order_idx = 0
-            self.orders = [order]
+            self.orders = order
         
         ideal_order = np.arange(X.shape[1])
         self.rho, _ = spearmanr(ideal_order, self.orders[best_order_idx])
@@ -86,6 +106,9 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         }
         
     def summary(self):
+        if self.orders is None or self.best_order is None:
+            print("No results to summarize. Make sure to run fit() successfully.")
+            return
         print(f"Best Order: {self.best_order}")
         print(f"Spearman's Rho: {self.spearman_rho}")
         print(f"Kendall's Tau: {self.kendall_tau}")
@@ -94,3 +117,5 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
         print(f"First {num_orders} MCMC sampled orders:", self.orders[:num_orders])
+        
+

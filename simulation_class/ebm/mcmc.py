@@ -32,8 +32,8 @@ def greedy_ascent(log_p_E: np.ndarray, log_p_not_E: np.ndarray,
         else:
             order[a], order[b] = order[b], order[a]
             
-        if i % 1000 == 0:  # debug print called every x iters
-            print(f"Iteration {i}: a={a}, b={b}, order={order}, old_loglike={old_loglike}, new_loglike={new_loglike}")    
+        # if i % 1000 == 0:  # debug print called every x iters
+        #     print(f"Iteration {i}: a={a}, b={b}, order={order}, old_loglike={old_loglike}, new_loglike={new_loglike}")    
         
     return order, loglike, update_iters
 
@@ -61,17 +61,19 @@ def mcmc(log_p_E: np.ndarray, log_p_not_E: np.ndarray,
         new_loglike = model.compute_total_likelihood(order, prior=prior)
         p = np.exp(new_loglike - old_loglike)
         
-        if i % 100000 == 0:  # debug print called every x iters
-            print(f"Iteration {i}: a={a}, b={b}, order={order}, old_loglike={old_loglike}, new_loglike={new_loglike}, p={p}")
+        # if i % 100000 == 0:  # debug print called every x iters
+        #     print(f"Iteration {i}: a={a}, b={b}, order={order}, old_loglike={old_loglike}, new_loglike={new_loglike}, p={p}")
         
-        if p > random.random_sample(): # TODO: check probas validity
+        if p > random.random_sample():
             old_loglike = new_loglike
             loglike.append(old_loglike)
             update_iters.append(i)
-            orders.append(order.copy())     
+            orders.append(order.copy())
             probas.append(p)
+            #print(f"accepted: order={order}, loglike={old_loglike}")
         else:
             order[a], order[b] = order[b], order[a]
+            #print(f"rejected: order={order}, loglike={old_loglike}")
     return orders, loglike, update_iters, probas
 
 

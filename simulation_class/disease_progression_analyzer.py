@@ -8,16 +8,12 @@ class DiseaseProgressionAnalyzer:
         self.X, self.y = self._prepare_data(patient_samples)
         self.ebm_analyzer = None
         self.prior = None
-        
-    def write_csv(self, filename):
-        combined_data = pd.concat([self.X, self.y], axis=1)
-        combined_data.to_csv(filename, index=False)
 
     def _prepare_data(self, patient_samples):
         stages = np.array([sample[0] for sample in patient_samples])
         biomarkers = np.array([sample[1] for sample in patient_samples])
         n_healthy = sum(stages <= 3)  # adjust threshold as needed
-        y = np.array([0] * n_healthy + [1] * (len(stages) - n_healthy))
+        y = np.array([0] * n_healthy + [1] * (len(stages) - n_healthy)) # recall this only works when patients are ordered by biomarker
         return biomarkers, y
 
     def run_analysis(self, analysis_type='ebm'):
@@ -32,7 +28,7 @@ class DiseaseProgressionAnalyzer:
 
     def set_prior(self, prior):
         self.prior = prior
-
+        
     def print_orders(self, num_orders=10):
         if self.ebm_analyzer is None:
             raise ValueError("EBMAnalyzer not fitted. Run run_analysis() first.")
