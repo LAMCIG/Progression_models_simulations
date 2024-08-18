@@ -5,7 +5,7 @@ from .biomarker_utils import generate_transition_matrix, initialize_biomarkers, 
 from .ode_generator import ODEGenerator
 
 class CanonicalGenerator:
-    def __init__(self, n_biomarker_stages: int, model_type: str = 'sigmoid', biomarkers_params: Dict = None):
+    def __init__(self, n_biomarker_stages: int, model_type: str = 'sigmoid', biomarkers_params: Dict = None, random_state: int = 10):
         """
         Initializes the CanonicalGenerator with the specified parameters. Parameters will create the biomarker progressions
         and then store them in model_values matrix and biomarker_values. model_values is the higher resolution representation
@@ -24,6 +24,7 @@ class CanonicalGenerator:
         self.n_biomarker_stages = n_biomarker_stages
         self.model_type = model_type
         self.biomarkers_params = biomarkers_params
+        self.random_state = random_state
         
         # Attributes
         self.prior = None
@@ -123,12 +124,27 @@ class CanonicalGenerator:
                 column_idx += 1
             return model_values
         
-        ode_generator = ODEGenerator(self.n_biomarker_stages, model_type=self.model_type)
+        def _normalize_model_values(model_values: np.ndarray) -> np.ndarray:
+            """
+            Normalize each biomarker's values so that the maximum value is 1.
+            """
+            max_values = np.max(model_values, axis=1, keepdims=True)
+            return model_values / max_values
+        
+        ode_generator = ODEGenerator(self.n_biomarker_stages, model_type=self.model_type, random_state = self.random_state)
         t, x = ode_generator.generate_model()
         self.time_points = t
         self.prior = ode_generator.get_connectivity_matrix()
         x = _biomarker_sort(x)
+        x = _normalize_model_values(x)
         return x # x is just the model_value at each timepoint t
+    
+    def _normalize_model_values(model_values: np.ndarray) -> np.ndarray:
+        """
+        Normalize each biomarker's values so that the maximum value is 1.
+        """
+        max_values = np.max(model_values, axis=1, keepdims=True)
+        return model_values / max_values
     
     def _get_discrete_stage_values(self):
         """
