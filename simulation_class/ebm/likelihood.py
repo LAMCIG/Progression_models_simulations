@@ -1,6 +1,5 @@
 import numpy as np
 
-
 class EventProbabilities:
     def __init__(self, log_p_E: np.ndarray, log_p_not_E: np.ndarray):
         self.log_p_E = log_p_E

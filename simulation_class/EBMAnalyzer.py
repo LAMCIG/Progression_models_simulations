@@ -6,7 +6,7 @@ from .ebm.mcmc import greedy_ascent, mcmc
 from .ebm.likelihood import EventProbabilities
 import matplotlib.pyplot as plt
 class EBMAnalyzer(BaseEstimator, TransformerMixin):
-    def __init__(self, distribution=norm, prior = None, **dist_params):
+    def __init__(self, distribution="norm", prior = None, **dist_params):
         self.distribution = distribution
         self.dist_params = dist_params
         self.prior = prior
@@ -22,9 +22,6 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         ## evaluation metrics
         self.spearman_rho = None
         self.kendall_tau = None
-    
-
-
 
     def fit(self, X, y=None):
         
@@ -40,7 +37,10 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                  **self.dist_params)
 
         starting_order = np.arange(X.shape[1])
+        ideal_order = np.arange(X.shape[1])
         np.random.shuffle(starting_order)
+        starting_tau, _ = kendalltau(ideal_order, starting_order)
+        print(f"Starting Order: {starting_order}, kendall-tau:{starting_tau}")
 
         order, loglike, update_iters = greedy_ascent(self.log_p_e, 
                                                      self.log_p_not_e, 
@@ -50,7 +50,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020
                                                      )
         
-        print(f"Greedy Ascent Result: {order}")
+        print(f"Greedy Ascent Result: {starting_order}")
 
         orders, loglike, update_iters, probas = mcmc(self.log_p_e, 
                                                      self.log_p_not_e, 
@@ -61,26 +61,19 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      )
         
         
-        def plot_loglike(loglike):
-            plt.figure(figsize=(10, 6))
-            plt.plot(loglike, label='Log-Likelihood')
-            plt.xlabel('Iterations')
-            plt.ylabel('Log-Likelihood')
-            plt.legend()
-            plt.grid(True)
-            plt.show()
-        plot_loglike(loglike)
-        
         if len(loglike) > 0:
             best_order_idx = np.argmax(loglike)
             self.orders = orders
         else: # contingency for when no orders are generated
             best_order_idx = 0
-            self.orders = order
+            self.orders = starting_order
         
-        ideal_order = np.arange(X.shape[1])
-        self.rho, _ = spearmanr(ideal_order, self.orders[best_order_idx])
-        self.kendall_tau, _ = kendalltau(ideal_order, self.orders[best_order_idx])
+        
+        print(ideal_order)
+        best_order = np.array(self.orders[best_order_idx]).flatten()
+        print(best_order)
+        self.rho, _ = spearmanr(np.array(ideal_order, dtype=np.float64), np.array(best_order, dtype=np.float64))
+        self.kendall_tau, _ = kendalltau(ideal_order, best_order)
         self.loglike = loglike
         self.update_iters = update_iters
         self.probas = probas
@@ -117,5 +110,12 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
         print(f"First {num_orders} MCMC sampled orders:", self.orders[:num_orders])
+        
+    def get_orders(self):
+        return self.orders
+    
+    def get_loglike(self):
+        return self.loglike
+
         
 

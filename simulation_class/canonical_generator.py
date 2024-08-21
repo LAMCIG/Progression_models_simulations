@@ -126,10 +126,10 @@ class CanonicalGenerator:
         
         def _normalize_model_values(model_values: np.ndarray) -> np.ndarray:
             """
-            Normalize each biomarker's values so that the maximum value is 1.
+            Normalize all biomarker values so that the maximum value across all biomarkers is 1.
             """
-            max_values = np.max(model_values, axis=1, keepdims=True)
-            return model_values / max_values
+            max_value = np.max(model_values)  # Find the global maximum across all biomarkers
+            return model_values / max_value  # Normalize all values by the global maximum
         
         ode_generator = ODEGenerator(self.n_biomarker_stages, model_type=self.model_type, random_state = self.random_state)
         t, x = ode_generator.generate_model()

@@ -76,7 +76,6 @@ def mcmc(log_p_E: np.ndarray, log_p_not_E: np.ndarray,
             #print(f"rejected: order={order}, loglike={old_loglike}")
     return orders, loglike, update_iters, probas
 
-
 def get_optimal_order(orders: list):
     """Computes optimal order from list of orders obtained over MCMC runs."""
     # TODO: number of regions is hardcoded
