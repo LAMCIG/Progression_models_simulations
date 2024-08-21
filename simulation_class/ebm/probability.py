@@ -2,21 +2,31 @@ import numpy as np
 from .transformer import ContinuousDistributionFitter
 from scipy.stats import norm, uniform, expon, lognorm # <-- add more distributions here
 
+# Dictionary of supported distributions
+dist_dict = {
+    "norm": norm,
+    "uniform": uniform,
+    "expon": expon,
+    "lognorm": lognorm,
+    # Add more distributions here if needed
+}
+
 # TODO: docstrings
-def fit_distribution(data, dist_name = "norm"):
-    dist_dict = {
-        "norm": norm,
-        "uniform": uniform,
-        "expon": expon,
-        "lognorm": lognorm,
-      # "'example string': example scipy distribution"
-      
-      # You may add which ever distribution you would like to use here,
-      # DO NOT FORGET TO IMPORT YOUR DISTRIBUTION FROM SCIPY.STATS  
-    }
+def fit_distribution(data, dist_name="lognorm"):
+    """
+    Fit a specified distribution to the data.
     
+    Parameters:
+    data (np.ndarray): The data to fit.
+    dist_name (str): The name of the distribution to fit.
+    
+    Returns:
+    dist (scipy.stats distribution): The fitted distribution.
+    params (tuple): The parameters of the fitted distribution.
+    """
     if dist_name not in dist_dict:
-        raise ValueError(f"Unsupported distribution type: {dist_name}\nPlease, make sure your desired distribution has been imported.")
+        raise ValueError(f"Unsupported distribution type: {dist_name}\nPlease ensure your desired distribution has been imported.")
+    
     dist = dist_dict[dist_name]
     params = dist.fit(data)
     return dist, params
@@ -56,67 +66,80 @@ def fit_distributions(X, y, normalize=False, distribution=norm, **dist_params):
 # https://stackoverflow.com/questions/48465737/how-to-convert-log-probability-into-simple-probability-between-0-and-1-values-us
 # https://medium.com/anu-perumalsamy/log-likelihood-function-by-hand-r-and-python-with-cheat-sheet-3541effbcd88
 
-def log_distributions(X, y, point_proba=False, *, X_test=None, y_test=None, normalize=False, eps=1e-8, distribution=norm, **dist_params):
-    """precompute probabilities for all features."""
-    
-    # convert input data to float64 numpy arrays
-    X = np.array(X).astype(np.float64)
-    y = np.array(y)
-    
-    # fit distributions to the data
-    fitter_e, fitter_not_e = fit_distributions(X, y, normalize=normalize, distribution=distribution, **dist_params)
+def log_distributions(X, y, point_proba=False, distribution="norm", normalize=False, eps=1e-8):
+    """
+    Precompute log probabilities for all features using specified distribution.
 
-    # if test data is provided, use it
-    if X_test is not None:
-        X = np.array(X_test).astype(np.float64)
-        y = np.array(y_test)
+    Parameters:
+    X (np.ndarray): Feature matrix.
+    y (np.ndarray): Labels (0 or 1).
+    point_proba (bool): Whether to use point probabilities.
+    dist_name (str): The name of the distribution to use.
+    normalize (bool): Whether to normalize X.
+    eps (float): Small value to avoid log(0).
 
-    n, m = X.shape  # number of samples and number of features
-    log_p_e, log_p_not_e = np.zeros_like(X), np.zeros_like(X)  # initialize log probability matrices
+    Returns:
+    log_p_e (np.ndarray): Log probabilities for event (diseased) distribution.
+    log_p_not_e (np.ndarray): Log probabilities for non-event (healthy) distribution.
+    """
+    if normalize:
+        X = X / X.max(axis=1)[:, np.newaxis]
 
-    # determine if we need to flip the cdf by comparing to median 
-    flip = np.median(fitter_not_e.transform(X), axis=0) > np.median(fitter_e.transform(X), axis=0)
+    # Fit distributions for event (diseased) and non-event (healthy)
+    event_data = X[y == 1]
+    non_event_data = X[y == 0]
 
-    if not point_proba:
-        # calculate log_probabilities w/ out using point probabilities
-        for i in range(n):  # iterate over samples
-            for j in range(m):  # iterate over features
-                # calculate the probability for the "diseased" distribution
-                p = fitter_e.cdf(np.clip(X[i, j], fitter_e.lower_bound[j] + eps, fitter_e.upper_bound[j] - eps), j)
-                if flip[j]:  # if flip is true, invert the probability
+    event_dist, event_params = fit_distribution(event_data.flatten(), distribution)
+    non_event_dist, non_event_params = fit_distribution(non_event_data.flatten(), distribution)
+
+    n, m = X.shape
+    log_p_e, log_p_not_e = np.zeros_like(X), np.zeros_like(X)
+
+    flip = np.median(event_dist.cdf(X), axis=0) > np.median(non_event_dist.cdf(X), axis=0)
+
+    for i in range(n):
+        for j in range(m):
+            # Calculate log probabilities
+            if not point_proba:
+                p = event_dist.cdf(X[i, j])
+                if flip[j]:
                     p = 1 - p
-                log_p_e[i, j] = np.log(np.clip(1 - p, eps, 1 - eps))  # store the log probability
+                log_p_e[i, j] = np.log(np.clip(1 - p, eps, 1 - eps))
 
-                # calculate the probability for the "healthy" distribution
-                p = fitter_not_e.cdf(X[i, j], j)
-                if flip[j]:  # if flip is true, invert the probability
+                p = non_event_dist.cdf(X[i, j])
+                if flip[j]:
                     p = 1 - p
-                log_p_not_e[i, j] = np.log(np.clip(p, eps, 1 - eps))  # store the log probability
-    else:
-        # calculate log_probabilities w/ point probabilities
-        for i in range(n):  # samples
-            for j in range(m):  # features
-                window = np.abs(fitter_e.upper_bound[j] - fitter_e.lower_bound[j]) / 20  # define a window for point probability
-
-                # calculate the log probability for the "diseased" distribution
-                p_left = fitter_e.cdf(np.clip(X[i, j], fitter_e.lower_bound[j] + eps, fitter_e.upper_bound[j] - eps) - window / 2, j)
-                p_right = fitter_e.cdf(np.clip(X[i, j], fitter_e.lower_bound[j] + eps, fitter_e.upper_bound[j] - eps) + window / 2, j)
+                log_p_not_e[i, j] = np.log(np.clip(p, eps, 1 - eps))
+            else:
+                window = np.abs(event_dist.ppf(0.95) - event_dist.ppf(0.05)) / 20
+                p_left = event_dist.cdf(X[i, j] - window / 2)
+                p_right = event_dist.cdf(X[i, j] + window / 2)
                 log_p_e[i, j] = np.log(np.clip(p_right - p_left, eps, 1 - eps))
 
-                # calculate the log probability for the "healthy" distribution
-                p_left = fitter_not_e.cdf(X[i, j] - window / 2, j)
-                p_right = fitter_not_e.cdf(X[i, j] + window / 2, j)
+                p_left = non_event_dist.cdf(X[i, j] - window / 2)
+                p_right = non_event_dist.cdf(X[i, j] + window / 2)
                 log_p_not_e[i, j] = np.log(np.clip(p_right - p_left, eps, 1 - eps))
     
     return log_p_e, log_p_not_e
 
-def predict_stage(event_order, log_p_e, log_p_not_e): # from anvars old code
+def predict_stage(event_order, log_p_e, log_p_not_e):
+    """
+    Predict the stage of the event based on the log probabilities.
+
+    Parameters:
+    event_order (list): The order of events.
+    log_p_e (np.ndarray): Log probabilities for the event.
+    log_p_not_e (np.ndarray): Log probabilities for non-event.
+
+    Returns:
+    likelihood (np.ndarray): Predicted likelihood for each stage.
+    """
     likelihood = []
     for k in range(len(event_order)):
-        likelihood.append(log_p_e[:, event_order[k]]- log_p_not_e[:, event_order[k]]) 
+        likelihood.append(log_p_e[:, event_order[k]] - log_p_not_e[:, event_order[k]])
     likelihood = np.array(likelihood)
     
-    # conversion from log likelihood --> probablility
+    # Convert log likelihood to probability
     likelihood = np.exp(likelihood)
     likelihood /= likelihood.sum(axis=0, keepdims=True)
     

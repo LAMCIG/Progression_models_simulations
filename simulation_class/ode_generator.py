@@ -65,6 +65,26 @@ class ODEGenerator:
 
         self.connectivity_matrix = K
         return K
+    
+    def binary_fully_connected_matrix(self, size):
+        """Generates an adjacency matrix with zero diagonal."""
+        A = np.ones([size, size])
+        np.fill_diagonal(A, 0)
+        return A
+
+    def tridiagonal_matrix(self, size):
+        """Generates a binary tridiagonal adjacency matrix with zero diagonal."""
+        A = np.zeros((size, size))
+        np.fill_diagonal(A[:-1, 1:], 1)
+        np.fill_diagonal(A[1:, :-1], 1)
+        return A
+    
+    def compute_laplacian_matrix(self, A):
+        """Generates the Laplacian matrix from the adjacency matrix as described by Garbarino."""
+        degree_matrix = np.diag(np.sum(A, axis=1))
+        laplacian_matrix = degree_matrix - A
+        return laplacian_matrix
+    
 #%% LOGISTIC MODEL
     def multi_logistic_deriv_force(self, K, f, x):
         return np.dot(np.eye(K.shape[0]) - np.diag(x), np.dot(K, x) + f)
@@ -99,48 +119,32 @@ class ODEGenerator:
 
         return t, x
 
-#%% ACP MODEL
-    def acp_model(self):
+#%% ACP MODEL  
+    def acp_model(self, l1_mean=3, l2_mean=3, gamma_mean=0.6, eta_mean=0.9, k_ij_value=0.5, random_state=10):
+        np.random.seed(random_state)
+        
         n = self.n_biomarker_stages
-        
-        
-        
-        t = np.linspace(0, 100, 200)
+        A = self.tridiagonal_matrix(n)
+        H = self.compute_laplacian_matrix(A)
+        t = np.linspace(0, 70, 1000)
         dt = t[1] - t[0]  # time step
         x0 = np.zeros(n)
         x0[0] = 0.05
-        
-        #A = self.random_connectivity_matrix(n, 1.2, 0.1, False)
-        A = np.matrix([[0,1,1],
-                        [1,0,1],
-                        [1,1,0]])
-        
-        H = np.diag(np.sum(A, axis=0)) - A
-        
-        k_ij = np.random.normal(loc=0.05, scale=1, size=3)
-        gamma = np.ones(3) * 0.6
-        eta = np.ones(3) * 0.9
-        
-        # k_ij = self.rng.uniform(0.05, 1, n) 
-        # gamma = self.rng.uniform(0.4, 0.8, n)
-        # eta = self.rng.uniform(1.0, 1.5, n)
-        
-        print(f'k_ij: {k_ij}\ngamma: {gamma}\neta:{eta}')
-        
-        l1 = 3
-        l2 = 3
 
-        # clipping range to avoid overflow
-        clip_min = -500
-        clip_max = 500
+        # params
+        l1 = np.random.normal(loc=l1_mean, scale=1, size=n)
+        l2 = np.random.normal(loc=l2_mean, scale=1, size=n)
+        gamma = np.random.normal(loc=gamma_mean, scale=0.1, size=n)
+        eta = np.random.normal(loc=eta_mean, scale=0.1, size=n)
+        k_ij = np.random.normal(loc=k_ij_value, scale=0.1, size=n)
 
         def acp_equations(f, tau, A, H, k_ij, gamma, eta, l1, l2):
-            exp_1 = np.clip(-l1 * (f - gamma), clip_min, clip_max)
-            exp_2 = np.clip(l2 * (f - eta), clip_min, clip_max)
-            
+            exp_1 = -l1 * (f - gamma)
+            exp_2 = l2 * (f - eta)
+
             K_ACP = k_ij / ((1 + np.exp(exp_1)) * (1 + np.exp(exp_2)))
             R_ACP = k_ij / (1 + np.exp(exp_2))
-            dfdtau = np.dot((A * K_ACP), np.dot(H, f)) + R_ACP * f
+            dfdtau = np.dot((A * K_ACP), np.dot(H, f)) + np.multiply(R_ACP, f)
             return dfdtau
 
         # solution array
@@ -157,43 +161,45 @@ class ODEGenerator:
 
 #%% DIFFUSION MODEL
     def diffusion_model(self):
-        np.random.RandomState(self.random_state)
+        np.random.seed(self.random_state)
         n = self.n_biomarker_stages
-        t = np.linspace(0, 100, 200)
+        t = np.linspace(0, 20, 200)
         step = t[1] - t[0]  # time step
         x = np.zeros((n, len(t)))
-        
-        x[:, 0] = np.ones(n) * 0.5 + np.random.normal(0, 0.01, n)
-        x[0, 0] = 0.1  # set the initial condition for the first biomarker
-        
-        A = self.random_connectivity_matrix(n, 1.2, 0.1, False)
+
+        x[:, 0] = np.random.uniform(0.05, 0.1, n)
+
+        A = self.tridiagonal_matrix(n)
         H = np.diag(np.sum(A, axis=0)) - A
 
-        k_ij = np.random.uniform(0.5, 2, n)
-        K = np.diag(k_ij)
-        
-        # euler
+        k_ij = np.random.uniform(0.5, 2, (n, n))
+        K = A * k_ij
+
+        # forward euler
         for i in range(1, len(t)):
-            dfdtau = -np.dot(np.dot(A * K, H), x[:, i-1])
+            dfdtau = np.dot(K, np.dot(H, x[:, i-1]))  # diffusion equation
             x[:, i] = x[:, i-1] + dfdtau * step
+            x[:, i] = np.maximum(x[:, i], 0)
+
         return t, x
 
 #%% REACTION DIFFUSION (RD)
     def reaction_diffusion_model(self):
+        np.random.seed(self.random_state)
         n = self.n_biomarker_stages
         step = self.step
         n_steps = self.n_steps
         t = np.linspace(0, 100, n_steps)
-        x0 = np.ones(n) * 0.05
-        x0[0] = 0.05
 
-        A = self.random_connectivity_matrix(n, 1.2, 0.1, False)
+        x0 = np.random.uniform(0.05, 0.1, n)
+
+        A = self.tridiagonal_matrix(n)
         H = np.diag(np.sum(A, axis=0)) - A
 
-        k_ij = np.random.uniform(0.2, 1, n)
+        k_ij = np.random.uniform(0.2, 1, n)  # Propagation rates
         K = np.diag(k_ij)
-        nu = np.random.uniform(1, 2, n)  # maximal concentration threshold
-        R = np.random.uniform(0.1, 0.3, n)  # aggregation rate
+        nu = np.random.uniform(1, 2, n)  # Maximal concentration threshold
+        R = np.random.uniform(0.1, 0.3, n)  # Aggregation rate
 
         x = np.zeros((n, n_steps))
         x[:, 0] = x0
@@ -202,10 +208,12 @@ class ODEGenerator:
             diffusion_term = np.dot((A * K), np.dot(H, x[:, i-1]))
             reaction_term = R * x[:, i-1] * (nu - x[:, i-1])
             dx_dt = diffusion_term + reaction_term
-            x[:, i] = x[:, i-1] + step * np.maximum(dx_dt, 0)  # forward euler step
+
+            # Euler integration with non-negativity constraint
+            x[:, i] = x[:, i-1] + step * dx_dt
+            x[:, i] = np.maximum(x[:, i], 0)  # Enforce non-negativity
 
         return t, x
-
 #%%
     def get_connectivity_matrix(self):
         return self.connectivity_matrix
