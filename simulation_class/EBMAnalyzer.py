@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats import norm, spearmanr, kendalltau
-from .ebm.probability import log_distributions, predict_stage
+from .ebm.probability_legacy import log_distributions, predict_stage
 from .ebm.mcmc import greedy_ascent, mcmc
 from .ebm.likelihood import EventProbabilities
 import matplotlib.pyplot as plt
@@ -91,6 +91,8 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
         self.best_order = self.orders[np.argmax(self.loglike)]
+<<<<<<< HEAD
+=======
 
         log_p_e, log_p_not_e, cdf_p_e, cdf_p_not_e, \
         left_min, right_max, flip_vec = log_distributions(X, y, 
@@ -99,6 +101,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                  fitted_cdfs = self.fitted_cdfs,
                                                  **self.dist_params)
 
+>>>>>>> 4cdaeb76be7592125a24fc9514681ba33778b201
         likelihood_matrix = predict_stage(self.best_order, log_p_e, log_p_not_e)
         return likelihood_matrix
     
