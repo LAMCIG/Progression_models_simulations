@@ -78,8 +78,8 @@ def log_distributions(X_, y=None,
         left_min = fitted_cdfs[2]
         right_max = fitted_cdfs[3]
     else:
-        # except("throwing an error (no y or fitted params)")
-        print("throwing an error (no y or fitted params)")
+        raise ValueError("no y or fitted params")
+        # print("throwing an error (no y or fitted params)")
 
     
     if X_test is not None:
