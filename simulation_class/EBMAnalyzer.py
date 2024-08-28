@@ -31,10 +31,16 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if y is not None and not np.all(np.isfinite(y)):
             raise ValueError("The data in y contains non-finite values (NaN or Inf).")
         
-        self.log_p_e, self.log_p_not_e = log_distributions(X, y, 
+        self.log_p_e, self.log_p_not_e, \
+        cdf_p_e, cdf_p_not_e, left_min, right_max = log_distributions(X, y, 
                                                  point_proba=False, 
                                                  distribution=self.distribution, 
                                                  **self.dist_params)
+        self.fitted_cdfs = []
+        self.fitted_cdfs.append(cdf_p_e)
+        self.fitted_cdfs.append(cdf_p_not_e)
+        self.fitted_cdfs.append(left_min)
+        self.fitted_cdfs.append(right_max)
 
         starting_order = np.arange(X.shape[1])
         ideal_order = np.arange(X.shape[1])
@@ -84,7 +90,15 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
         self.best_order = self.orders[np.argmax(self.loglike)]
-        likelihood_matrix = predict_stage(self.best_order, self.log_p_e, self.log_p_not_e)
+
+        log_p_e, log_p_not_e, cdf_p_e, cdf_p_not_e, \
+        left_min, right_max = log_distributions(X, y, 
+                                                 point_proba=False, 
+                                                 distribution=self.distribution, 
+                                                 fitted_cdfs = self.fitted_cdfs,
+                                                 **self.dist_params)
+
+        likelihood_matrix = predict_stage(self.best_order, log_p_e, log_p_not_e)
         return likelihood_matrix
     
     def get_params(self):
