@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def fit_distributions(X, y, normalize=False):
+def fit_distributions(X_, y, normalize=False):
     """Fit distribution p(x|E), p(x|~E) as a mixture of Gaussian and Uniform, see Fonteijn 
     section `Mixture models for the data likelihood`. 
     - P(x|E) = P(x > X | E)
@@ -16,15 +16,15 @@ def fit_distributions(X, y, normalize=False):
     std = X[y==0, ...].std(axis=0)
     p_not_e = [norm(loc, s) for loc, s in zip(avg, std)]
 
-    # left_min = X.min(axis=0)
-    left_min = X[y==1, ...].min(axis=0)
+    left_min = X.min(axis=0)
+    # left_min = X[y==1, ...].min(axis=0)
     right_max = X[y==1, ...].max(axis=0)# avg.copy()
     
     p_e = [uniform(m1, m2-m1) for m1, m2 in zip(left_min, right_max)]
     return p_e, p_not_e, left_min, right_max
 
 
-def log_distributions_old(X, y, point_proba=False, *, X_test=None, y_test=None, normalize=False, eps=1e-8):
+def log_distributions_old(X_, y, point_proba=False, *, X_test_=None, y_test=None, normalize=False, eps=1e-8):
     """Precomute probabilities for all features."""
     X = np.array(X).astype(np.float64)
     y = np.array(y)
