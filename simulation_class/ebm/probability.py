@@ -1,5 +1,4 @@
 import numpy as np
-from .transformer import ContinuousDistributionFitter
 from scipy.stats import norm, uniform, expon, lognorm # <-- add more distributions here
 
 # Dictionary of supported distributions
@@ -12,7 +11,7 @@ dist_dict = {
 }
 
 # TODO: docstrings
-def fit_distribution(data, dist_name="lognorm"):
+def fit_distribution(data, dist_name="lognorm"): # TODO? should I pass a scipy distribution object
     """
     Fit a specified distribution to the data.
     
@@ -30,37 +29,6 @@ def fit_distribution(data, dist_name="lognorm"):
     dist = dist_dict[dist_name]
     params = dist.fit(data)
     return dist, params
-    
-# def log_distributions(X, y, point_proba=False, distribution='norm', **dist_params):
-#     event_data = X[y == 1]
-#     non_event_data = X[y == 0]
-
-#     event_dist, event_params = fit_distribution(event_data.flatten(), distribution)
-#     non_event_dist, non_event_params = fit_distribution(non_event_data.flatten(), distribution)
-
-#     log_p_E = event_dist.logpdf(X, *event_params[:-2], loc=event_params[-2], scale=event_params[-1])
-#     log_p_not_E = non_event_dist.logpdf(X, *non_event_params[:-2], loc=non_event_params[-2], scale=non_event_params[-1])
-
-#     return log_p_E, log_p_not_E
-
-def fit_distributions(X, y, normalize=False, distribution=norm, **dist_params):
-    """Fit distribution p(x|E), p(x|~E) as a mixture of Gaussian and Uniform, see Fonteijn 
-    section `Mixture models for the data likelihood`. 
-    - P(x|E) = P(x > X | E)
-    - P(x|~E) = P(x < X| ~E)
-    """
-    if normalize:
-        X = X / X.max(axis=1)[:, np.newaxis]
-
-    fitter_not_e = ContinuousDistributionFitter(distribution, **dist_params)
-    X_not_e = X[y == 0]
-    fitter_not_e.fit(X_not_e)
-
-    fitter_e = ContinuousDistributionFitter(uniform)
-    X_e = X[y == 1]
-    fitter_e.fit(X_e)
-
-    return fitter_e, fitter_not_e
 
 # https://stackoverflow.com/questions/5365520/numpy-converting-array-from-float-to-strings
 # https://stackoverflow.com/questions/48465737/how-to-convert-log-probability-into-simple-probability-between-0-and-1-values-us

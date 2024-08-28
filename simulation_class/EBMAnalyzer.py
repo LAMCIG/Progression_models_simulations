@@ -72,7 +72,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         print(ideal_order)
         best_order = np.array(self.orders[best_order_idx]).flatten()
         print(best_order)
-        self.rho, _ = spearmanr(np.array(ideal_order, dtype=np.float64), np.array(best_order, dtype=np.float64))
+        self.spearman_rho, _ = spearmanr(np.array(ideal_order, dtype=np.float64), np.array(best_order, dtype=np.float64))
         self.kendall_tau, _ = kendalltau(ideal_order, best_order)
         self.loglike = loglike
         self.update_iters = update_iters

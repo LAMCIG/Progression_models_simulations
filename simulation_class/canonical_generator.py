@@ -30,7 +30,7 @@ class CanonicalGenerator:
         self.prior = None
         self.time_points = None
         self.model_values = self._generate_model()
-        self.biomarker_values = self._get_discrete_stage_values() # TODO: refactor to `stage_values`
+        self.stage_values = self._get_discrete_stage_values() # values at each discrete stage
 
     def _generate_model(self) -> np.ndarray:
         """
@@ -146,9 +146,9 @@ class CanonicalGenerator:
         max_values = np.max(model_values, axis=1, keepdims=True)
         return model_values / max_values
     
-    def _get_discrete_stage_values(self):
+    def _get_discrete_stage_values(self) -> None: # this could be better written
         """
-        Converts `self.model_values` -> `self.biomarker values` (nd.array) 
+        Converts `self.model_values` -> `self.stage_values` (nd.array) 
         by taking the value of each biomarker at each stage.
         """
         if self.model_type in ['logistic']:
@@ -159,18 +159,21 @@ class CanonicalGenerator:
             return np.array([np.interp(np.arange(self.n_biomarker_stages), self.time_points, self.model_values[i]) for i in range(len(self.model_values))])
         else:
             return self.model_values[:, np.linspace(0, self.model_values.shape[1] - 1, self.n_biomarker_stages, dtype=int)]
-
-
     
-    def model_predict(self, stage: int, biomarker: int) -> float:
-        return self.biomarker_values[biomarker][stage]
+    ## Getters
     
+    def get_stage_values(self) -> np.ndarray: # TODO: discuss renaming to "generate_model" or "generate"
+        """Gets values at each discrete stage"""
+        return self.stage_values
     
+    def get_model_values(self) -> np.ndarray:
+        """Gets all values from models over model domain"""
+        return self.model_values
+        
     def get_prior(self) -> np.ndarray:
-        """
-        Gets prior.
-        """
+        """Gets prior."""
         return self.prior
+    
     
     ## Plotting
 
