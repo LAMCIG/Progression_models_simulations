@@ -64,19 +64,12 @@ def monotonize_X(X_,y, flip_vec=None):
 
     return X, flip_vec
 
-<<<<<<< HEAD
-def log_distributions(X_, y, point_proba=False, *, X_test_=None, y_test=None, normalize=False, eps=1e-8):
-=======
 def log_distributions(X_, y=None, 
                       point_proba=False, *, X_test_=None, y_test=None, 
                       normalize=False, eps=1e-8,
                       fitted_cdfs = None):
->>>>>>> 4cdaeb76be7592125a24fc9514681ba33778b201
     """Precomute probabilities for all features."""
-    X = np.array(X).astype(np.float64)
-
-    
-    
+    X = np.array(X_).astype(np.float64)
 
     if (y is not None) & (fitted_cdfs is None):
         y = np.array(y)
