@@ -28,7 +28,7 @@ def fit_distributions(X_, y, normalize=False):
 =======
 def monotonize_X(X_,y):
 
-    vec = 1*( X_[y==1, ...].mean(axis=0) <  X_[y==0, ...].mean(axis=0))
+    vec = 2*(1*( X_[y==1, ...].mean(axis=0) <  X_[y==0, ...].mean(axis=0))  - 0.5)
 
     X = X_.copy()
     for i in np.shape(X_)[1]:
