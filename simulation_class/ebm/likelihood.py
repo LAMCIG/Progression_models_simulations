@@ -21,12 +21,6 @@ class EventProbabilities:
             likelihood += self.log_p_E[:, event_order[k]] \
                         - self.log_p_not_E[:, event_order[k]] 
             self.subjects_likelihood += np.exp(likelihood)
-            
-            # if np.any(np.isnan(likelihood)):
-            #     print(f"NaN found in likelihood @ iter: {k}, for event_order: {event_order}")
-            # if np.any(np.isnan(self.subjects_likelihood)):
-            #     print(f"NaN found in subjects_likelihood @ iter: {k}, for event_order: {event_order}")
-        # assuming flat prior p(k)
         return self.subjects_likelihood
     
     
@@ -38,7 +32,7 @@ class EventProbabilities:
             i0 = event
         return total
 
-    
+        
     def compute_total_likelihood(self, event_order: np.ndarray = None, prior=None):
         """Computes log(P(X|S)), see Fonteijn, (3)"""
         # TODO? could further improve for MCMC procedure, since we only

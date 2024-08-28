@@ -11,6 +11,8 @@ dist_dict = {
 }
 
 # TODO: docstrings
+# TODO: Return to how fonteijn does it but with allow for change in direction
+
 def fit_distribution(data, dist_name="lognorm"): # TODO? should I pass a scipy distribution object
     """
     Fit a specified distribution to the data.
@@ -57,7 +59,7 @@ def log_distributions(X, y, point_proba=False, distribution="norm", normalize=Fa
     event_data = X[y == 1]
     non_event_data = X[y == 0]
 
-    event_dist, event_params = fit_distribution(event_data.flatten(), distribution)
+    event_dist, event_params = fit_distribution(event_data.flatten(), distribution) # TODO: ditch flatten()
     non_event_dist, non_event_params = fit_distribution(non_event_data.flatten(), distribution)
 
     n, m = X.shape
