@@ -32,7 +32,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             raise ValueError("The data in y contains non-finite values (NaN or Inf).")
         
         self.log_p_e, self.log_p_not_e, \
-        cdf_p_e, cdf_p_not_e, left_min, right_max = log_distributions(X, y, 
+        cdf_p_e, cdf_p_not_e, left_min, right_max, flip_vec = log_distributions(X, y, 
                                                  point_proba=False, 
                                                  distribution=self.distribution, 
                                                  **self.dist_params)
@@ -41,6 +41,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         self.fitted_cdfs.append(cdf_p_not_e)
         self.fitted_cdfs.append(left_min)
         self.fitted_cdfs.append(right_max)
+        self.fitted_cdfs.append(flip_vec)
 
         starting_order = np.arange(X.shape[1])
         ideal_order = np.arange(X.shape[1])
@@ -92,7 +93,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         self.best_order = self.orders[np.argmax(self.loglike)]
 
         log_p_e, log_p_not_e, cdf_p_e, cdf_p_not_e, \
-        left_min, right_max = log_distributions(X, y, 
+        left_min, right_max, flip_vec = log_distributions(X, y, 
                                                  point_proba=False, 
                                                  distribution=self.distribution, 
                                                  fitted_cdfs = self.fitted_cdfs,
