@@ -3,23 +3,25 @@ import pandas as pd
 from .EBMAnalyzer import EBMAnalyzer
 import scipy.stats as stats
 class DiseaseProgressionAnalyzer:
-    def __init__(self, patient_samples):
-        self.patient_samples = patient_samples
-        self.X, self.y = self._prepare_data(patient_samples)
+    def __init__(self, X: np.ndarray, y: np.ndarray):
+        """
+        Initializes the DiseaseProgressionAnalyzer with biomarker data (X) and labels (y).
+        
+        Parameters:
+        X (np.ndarray): Biomarker data for each patient.
+        y (np.ndarray): Labels indicating health.
+        """
+        self.X = X
+        self.y = y
         self.ebm_analyzer = None
         self.prior = None
 
-    def _prepare_data(self, patient_samples):
-        stages = np.array([sample[0] for sample in patient_samples])
-        biomarkers = np.array([sample[1] for sample in patient_samples])
-        n_healthy = sum(stages <= 3)  # adjust threshold as needed
-        y = np.array([0] * n_healthy + [1] * (len(stages) - n_healthy)) # recall this only works when patients are ordered by biomarker
-        return biomarkers, y
-
-    def run_analysis(self, analysis_type='ebm'):
+    def run_analysis(self, analysis_type: str):
+        """
+        Runs specified analysis on the patient data.
+        """
         if analysis_type == 'ebm':
             self.ebm_analyzer = EBMAnalyzer(prior=self.prior)
-            # multiply 
             self.ebm_analyzer.fit(self.X, self.y) # im not a fan of the variable name but it will do
             likelihood_matrix = self.ebm_analyzer.transform(self.X)
             return likelihood_matrix

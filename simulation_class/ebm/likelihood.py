@@ -51,12 +51,4 @@ class EventProbabilities:
         if prior is not None:
             log_prior = self._compute_connectivity_prior(event_order=event_order, path_log_proba_adj=prior)
             
-        # subject_likelihood = self._subject_likelihood(event_order)
-        # if np.any(np.isnan(subject_likelihood)):
-        #     print(f"NaN found @ subject_likelihood for event_order {event_order}")
-        
-        # total_likelihood = np.sum(np.log(subject_likelihood)) + log_prior
-        # if np.isnan(total_likelihood):
-        #     print(f"NaN found @ total_likelihood for event_order {event_order}")
-            
         return np.sum(np.log(self._subject_likelihood(event_order))) + log_prior
