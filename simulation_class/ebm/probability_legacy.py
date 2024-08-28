@@ -24,9 +24,25 @@ def fit_distributions(X_, y, normalize=False):
     return p_e, p_not_e, left_min, right_max
 
 
+<<<<<<< HEAD
+=======
+def monotonize_X(X_,y):
+
+    vec = 1*( X_[y==1, ...].mean(axis=0) <  X_[y==0, ...].mean(axis=0))
+
+    X = X_.copy()
+    for i in np.shape(X_)[1]:
+        X[:,i] = X_[:,i]*vec
+
+    return X
+
+>>>>>>> b4dccb83894ca01fd3cf48792edcd7ab1aab591a
 def log_distributions_old(X_, y, point_proba=False, *, X_test_=None, y_test=None, normalize=False, eps=1e-8):
     """Precomute probabilities for all features."""
     X = np.array(X).astype(np.float64)
+    X = monotonize_X(X_,y)
+    X_test = monotonize_X(X_test_,y)
+
     y = np.array(y)
     cdf_p_e, cdf_p_not_e, left_min, right_max = fit_distributions(X, y, normalize=normalize)
     
