@@ -2,7 +2,7 @@ import numpy as np
 from scipy.stats import norm, uniform
 
 
-def fit_distributions(X_, y, normalize=False):
+def fit_distributions(X, y, normalize=False):
     """Fit distribution p(x|E), p(x|~E) as a mixture of Gaussian and Uniform, see Fonteijn 
     section `Mixture models for the data likelihood`. 
     - P(x|E) = P(x > X | E)
@@ -50,18 +50,17 @@ def fit_distributions(X_, y, normalize=False):
 #     return p_e, p_not_e
 
 
-def monotonize_X(X_,y, flip_vec=None):
-
+def monotonize_X(X_, y, flip_vec=None):
     if X_ is None:
-        pass
-
-    if (flip_vec is None) & (y is not None):
-        flip_vec = 2*(1*( X_[y==1, ...].mean(axis=0) <  X_[y==0, ...].mean(axis=0))  - 0.5)
+        raise ValueError("Input data X_ is None.")
+    
+    if flip_vec is None and y is not None:
+        flip_vec = 2 * (1 * (X_[y == 1, ...].mean(axis=0) < X_[y == 0, ...].mean(axis=0)) - 0.5)
 
     X = X_.copy()
-    for i in np.arange(np.shape(X_)[1]):
-        X[:,i] = X_[:,i]*flip_vec
-
+    for i in range(np.shape(X_)[1]):
+        X[:, i] = X_[:, i] * flip_vec[i]
+    
     return X, flip_vec
 
 def log_distributions(X_, y=None, 
@@ -69,12 +68,18 @@ def log_distributions(X_, y=None,
                       normalize=False, eps=1e-8,
                       fitted_cdfs = None):
     """Precomute probabilities for all features."""
+    if X_ is None:
+        raise ValueError("Input data X_ is None.")
+    
     X = np.array(X_).astype(np.float64)
 
+    
+    
     if (y is not None) & (fitted_cdfs is None):
         y = np.array(y)
         X, flip_vec = monotonize_X(X_=X_,y=y)
-        X_test, flip_vec = monotonize_X(X_=X_test_,y=y_test)
+        if X_test_ is not None:
+            X_test, flip_vec = monotonize_X(X_=X_test_,y=y_test)
         cdf_p_e, cdf_p_not_e, left_min, right_max = fit_distributions(X, y, normalize=normalize)
         
     elif fitted_cdfs is not None:
@@ -85,14 +90,13 @@ def log_distributions(X_, y=None,
         flip_vec = fitted_cdfs[4]
 
         X, flip_vec = monotonize_X(X_=X_,y=y,flip_vec=flip_vec)
-        X_test, flip_vec = monotonize_X(X_=X_test_,y=y_test,flip_vec=flip_vec)
+        if X_test_ is not None:
+            X_test, flip_vec = monotonize_X(X_=X_test_,y=y_test,flip_vec=flip_vec)
 
     else:
         raise ValueError("no y or fitted params")
-        # print("throwing an error (no y or fitted params)")
-
     
-    if X_test is not None:
+    if X_test_ is not None:
         X = np.array(X_test).astype(np.float64)
         y = np.array(y_test)
         
