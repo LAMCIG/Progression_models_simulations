@@ -59,7 +59,7 @@ def monotonize_X(X_,y, flip_vec=None):
         flip_vec = 2*(1*( X_[y==1, ...].mean(axis=0) <  X_[y==0, ...].mean(axis=0))  - 0.5)
 
     X = X_.copy()
-    for i in np.shape(X_)[1]:
+    for i in np.arange(np.shape(X_)[1]):
         X[:,i] = X_[:,i]*flip_vec
 
     return X, flip_vec

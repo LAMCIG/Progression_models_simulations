@@ -34,7 +34,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         self.log_p_e, self.log_p_not_e, \
         cdf_p_e, cdf_p_not_e, left_min, right_max, flip_vec = log_distributions(X, y, 
                                                  point_proba=False, 
-                                                 distribution=self.distribution, 
+                                                 #distribution=self.distribution, 
                                                  **self.dist_params)
         self.fitted_cdfs = []
         self.fitted_cdfs.append(cdf_p_e)
