@@ -56,7 +56,7 @@ def log_distributions(X, y, point_proba=False, *, X_test=None, y_test=None, norm
                 p_left = cdf_p_not_e[j].cdf(X[i, j]-window/2)
                 p_right = cdf_p_not_e[j].cdf(X[i, j]+window/2)
                 log_p_not_e[i,j] = np.log(np.clip(p_right - p_left, eps, 1-eps))
-    return log_p_e, log_p_not_e
+    return log_p_e, log_p_not_e, cdf_p_e, cdf_p_not_e
 
 
 def predict_stage(event_order, log_p_e, log_p_not_e):

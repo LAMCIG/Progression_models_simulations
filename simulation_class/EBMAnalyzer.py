@@ -31,7 +31,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if y is not None and not np.all(np.isfinite(y)):
             raise ValueError("The data in y contains non-finite values (NaN or Inf).")
         
-        self.log_p_e, self.log_p_not_e = log_distributions(X, y, point_proba=False, **self.dist_params)#distribution=self.distribution
+        self.log_p_e, self.log_p_not_e, cdf_pe, cdf_not_pe = log_distributions(X, y, point_proba=False, **self.dist_params)#distribution=self.distribution
         self.fitted_cdfs = []
 
         starting_order = np.arange(X.shape[1])
