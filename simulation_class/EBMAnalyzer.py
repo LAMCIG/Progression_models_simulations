@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats import norm, spearmanr, kendalltau
-from .ebm.probability_legacy import log_distributions, predict_stage
+from .ebm.probability_transformer import log_distributions, predict_stage
 from .ebm.mcmc import greedy_ascent, mcmc
 from .ebm.likelihood import EventProbabilities
 import matplotlib.pyplot as plt
@@ -31,7 +31,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if y is not None and not np.all(np.isfinite(y)):
             raise ValueError("The data in y contains non-finite values (NaN or Inf).")
         
-        self.log_p_e, self.log_p_not_e, cdf_pe, cdf_not_pe = log_distributions(X, y, point_proba=False, **self.dist_params)#distribution=self.distribution
+        self.log_p_e, self.log_p_not_e = log_distributions(X, y, point_proba=False, **self.dist_params)#distribution=self.distribution
         self.fitted_cdfs = []
 
         starting_order = np.arange(X.shape[1])
@@ -61,6 +61,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020
                                                      )
         
+        print(orders)
         
         if len(loglike) > 0:
             best_order_idx = np.argmax(loglike)
@@ -70,8 +71,9 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             self.orders = starting_order
         
         
-        best_order = np.array(self.orders[best_order_idx]).flatten()
+        best_order = np.array(self.orders[best_order_idx])
         print(f"Best Order:{best_order}")
+        
         self.spearman_rho, _ = spearmanr(ideal_order, best_order)
         self.kendall_tau, _ = kendalltau(ideal_order, best_order)
         self.loglike = loglike
