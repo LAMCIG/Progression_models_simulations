@@ -1,6 +1,7 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from typing import List, Tuple
+import seaborn as sns
 from scipy.stats import norm, uniform, erlang, pareto
 
 class SampleGenerator:
@@ -9,7 +10,7 @@ class SampleGenerator:
     
     Parameters:
         stage_values (np.ndarray): 2D array of biomarker values, where rows are biomarkers and columns are stages.
-        n_patients (int): Number of patients in your sample.
+        n_patients (int): Number of artificial patients in your sample.
         distribution (scipy.stats distribution): Distribution to sample patient stages.
         dist_params (dict): Parameters for the chosen distribution.
         add_noise (bool): Adds noise if True.
@@ -17,7 +18,7 @@ class SampleGenerator:
         random_state (int): Set random state for reproducible pseudo-random results.
     
     Attributes:
-        patient_samples (list): List of tuples with stage and biomarker values for each patient.
+        patient_samples (list): List of tuples with stage and biomarker values for each patient. For each element (patient_stage: int, biomarker_values: np.ndarray)
     """
     def __init__(self, stage_values: np.ndarray, n_patients: int, distribution=norm, dist_params=None, add_noise: bool = True, noise_std: float = 0.1, random_state: int = None):
         self.stage_values = stage_values
@@ -27,73 +28,101 @@ class SampleGenerator:
         self.add_noise = add_noise
         self.noise_std = noise_std
         self.random_state = random_state
+        
+        ## Attribute
         self.patient_samples = self._generate_patient_samples()
 
-    def _generate_patient_samples(self) -> List[Tuple[int, np.ndarray]]:
+    def _generate_patient_samples(self) -> pd.DataFrame:
+        # fix randomness and initialize array size of n_patients
         random = np.random.RandomState(self.random_state)
-        patient_samples = []
+        sample_stages = self._generate_stages()
         
-        stages = self._generate_stages()
-        for stage in stages:
-            biomarkers = self.stage_values[:, stage]
+        sample_data = []
+        
+        for stage in sample_stages:
+            biomarker_values = self.stage_values[:, stage] # get all biomarker values at specified stage
             if self.add_noise:
-                noise = random.normal(0, self.noise_std, biomarkers.shape)
-                biomarkers = np.clip(biomarkers + noise, 0, 1)  # ensures values are in the range [0,1]
-            patient_samples.append((stage, biomarkers))
-        return patient_samples
+                noise = random.normal(0, self.noise_std, biomarker_values.shape)
+                biomarker_values = np.clip(biomarker_values + noise, 0, 1)  # ensures values are in the range [0,1]
+            # Append each row of data for the patient: stage, biomarker values, target (healthy/unhealthy)
+            sample_data.append({'stage': stage, 'biomarker_values': biomarker_values})
+        
+        df = pd.DataFrame(sample_data)
+        
+        df['target'] = (df['stage'] > 2).astype(int)  # Assume 'healthy' is stage <= 2, stage 0 and 1 is healthy
+        
+        return df
     
     def _generate_stages(self) -> np.ndarray:
-        random = np.random.RandomState(self.random_state)
-        n_stages = self.stage_values.shape[1]
-        
-        # Generate stages based on the specified distribution
+        """
+        Returns a sorted ndarray (ascending) of statistically distibuted ints on interval [0, n_biomarkers - 1]
+        """
+        n_stages = self.stage_values.shape[1] # recall: columns = stages
         stages = self.distribution.rvs(size=self.n_patients, **self.dist_params)
         
-        # Clip and round stages to ensure they fall within the correct range
+        # clip and round stages ensures they fall within the correct range
         stages = np.clip(np.round(stages), 0, n_stages - 1).astype(int)
+        stages = np.sort(stages)
+        
         return stages
 
-    def _prepare_data(self) -> Tuple[np.ndarray, np.ndarray]:
-        stages = np.array([sample[0] for sample in self.patient_samples])
-        biomarkers = np.array([sample[1] for sample in self.patient_samples])
-        n_healthy = sum(stages <= 3)  # adjust threshold as needed
-        y = np.array([0] * n_healthy + [1] * (len(stages) - n_healthy))  # recall this only works when patients are ordered by biomarker
-        return biomarkers, y
+    def get_sample(self) -> pd.DataFrame:
+        return self.patient_samples
+    
+    def get_X(self) -> np.ndarray:
+        X = np.vstack(self.patient_samples['biomarker_values'].values)
+        return X
 
-    # Getter method for X and y
-    def get_sample(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self._prepare_data()
-
+    def get_y(self) -> np.ndarray:
+        y = self.patient_samples['target'].values
+        return y
+    
     #%% Plotting methods
     def plot_stage_histogram(self) -> None:
-        stages = [sample[0] for sample in self.patient_samples]
-        plt.hist(stages, bins=self.stage_values.shape[1], alpha=0.5)
+        """Plots histogram of patient stages."""
+        sns.histplot(self.patient_samples['stage'], bins=self.stage_values.shape[1], kde=False, color='skyblue', edgecolor='black')
         plt.xlabel('Disease Stage')
         plt.ylabel('Number of Patients')
-        plt.title('Patient Stage Distribution')
+        plt.title('Distribution of Patient Stages')
         plt.show()
 
-    def plot_biomarker_distribution(self, biomarker_index: int, healthy_stage_threshold: float = 2) -> None:
-        biomarkers = np.array([sample[1][biomarker_index] for sample in self.patient_samples])
-        stages = np.array([sample[0] for sample in self.patient_samples])
+    def plot_biomarker_distribution(self, stage: int) -> None:
+        """Plots distribution of biomarker values for patients at a specific stage."""
+        # Extract the threshold value from the diagonal of stage_values
+        threshold_value = self.stage_values[stage, stage]
         
-        healthy = biomarkers[stages <= healthy_stage_threshold * self.stage_values.shape[1]]
-        unhealthy = biomarkers[stages > healthy_stage_threshold * self.stage_values.shape[1]]
+        # Extract biomarker values and stages
+        biomarker_values = np.hstack(self.patient_samples['biomarker_values'])
+        stages = np.repeat(self.patient_samples['stage'], repeats=len(self.stage_values))
+        df = pd.DataFrame({'stage': stages, 'biomarker_value': biomarker_values})
         
-        bins = plt.hist(biomarkers, alpha=0.1, label='All', bins=20)
-        plt.hist(healthy, bins=bins[1], alpha=0.5, label='Healthy')
-        plt.hist(unhealthy, bins=bins[1], alpha=0.5, label='Unhealthy')
+        sns.histplot(df[df['stage'] == stage]['biomarker_value'], bins=20, kde=True, label='All', color='gray', alpha=0.2)
+        sns.histplot(df[(df['stage'] == stage) & (df['biomarker_value'] <= threshold_value)]['biomarker_value'], bins=20, kde=True, color='green', label='Healthy', alpha=0.5)
+        sns.histplot(df[(df['stage'] == stage) & (df['biomarker_value'] > threshold_value)]['biomarker_value'], bins=20, kde=True, color='red', label='Unhealthy', alpha=0.5)
+
+        plt.xlim([0,1])
         plt.xlabel('Biomarker Value')
         plt.ylabel('Frequency')
-        plt.title(f'Distribution of Biomarker {biomarker_index + 1}')
+        plt.title(f'Distribution of Biomarker Values for Stage {stage}')
         plt.legend()
         plt.show()
 
     def plot_patient_biomarkers(self, patient_index: int) -> None:
-        patient_sample = self.patient_samples[patient_index]
-        stage, biomarkers = patient_sample
-        plt.scatter([stage] * len(biomarkers), biomarkers)
-        plt.xlabel('Disease Stage')
-        plt.ylabel('Biomarker Value')
-        plt.title(f'Biomarker Values for Patient {patient_index}')
+        """Plots biomarker values for a specific patient."""
+        patient_sample = self.patient_samples.iloc[patient_index]
+        stage = patient_sample['stage']
+        biomarker_values = patient_sample['biomarker_values']
+        
+    def plot_vertical_boxplots(self, stage: int) -> None:
+        """Creates vertical box plots for each biomarker's distribution at a specified stage."""
+        stage_data = self.patient_samples[self.patient_samples['stage'] == stage]
+               
+        biomarker_matrix = np.vstack(stage_data['biomarker_values'].values)
+        df_biomarkers = pd.DataFrame(biomarker_matrix, columns=[f'biomarker {i+1}' for i in range(biomarker_matrix.shape[1])])
+        
+        sns.boxplot(data=df_biomarkers, orient='v', palette='Set2')
+        plt.title(f'Biomarker Value Distributions at Stage {stage}')
+        plt.xlabel('Biomarker')
+        plt.ylabel('Value')
+        plt.xticks(rotation=45)
         plt.show()
