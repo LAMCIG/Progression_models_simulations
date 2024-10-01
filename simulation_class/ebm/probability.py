@@ -59,8 +59,8 @@ def log_distributions(X, y, point_proba=False, distribution="norm", normalize=Fa
     event_data = X[y == 1]
     non_event_data = X[y == 0]
 
-    event_dist, event_params = fit_distribution(event_data.flatten(), distribution) # TODO: ditch flatten()
-    non_event_dist, non_event_params = fit_distribution(non_event_data.flatten(), distribution)
+    event_dist, event_params = fit_distribution(event_data, distribution) # TODO: ditch flatten()
+    non_event_dist, non_event_params = fit_distribution(non_event_data, distribution)
 
     n, m = X.shape
     log_p_e, log_p_not_e = np.zeros_like(X), np.zeros_like(X)

@@ -31,17 +31,10 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if y is not None and not np.all(np.isfinite(y)):
             raise ValueError("The data in y contains non-finite values (NaN or Inf).")
         
-        self.log_p_e, self.log_p_not_e, \
-        cdf_p_e, cdf_p_not_e, left_min, right_max, flip_vec = log_distributions(X, y, 
-                                                 point_proba=False, 
-                                                 distribution=self.distribution, 
-                                                 **self.dist_params)
+        self.log_p_e, self.log_p_not_e = log_distributions(X, y, 
+                                                           point_proba=False,
+                                                           **self.dist_params)
         self.fitted_cdfs = []
-        self.fitted_cdfs.append(cdf_p_e)
-        self.fitted_cdfs.append(cdf_p_not_e)
-        self.fitted_cdfs.append(left_min)
-        self.fitted_cdfs.append(right_max)
-        self.fitted_cdfs.append(flip_vec)
 
         starting_order = np.arange(X.shape[1])
         ideal_order = np.arange(X.shape[1])
@@ -57,7 +50,8 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020
                                                      )
         
-        print(f"Greedy Ascent Result: {starting_order}")
+        greedy_ascent_order = order
+        print(f"Greedy Ascent Result: {greedy_ascent_order}")
 
         orders, loglike, update_iters, probas = mcmc(self.log_p_e, 
                                                      self.log_p_not_e, 
@@ -67,17 +61,17 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020
                                                      )
         
-        
         if len(loglike) > 0:
             best_order_idx = np.argmax(loglike)
+            print(f"n orders generated: {len(orders)}")
             self.orders = orders
+            best_order = np.array(self.orders[best_order_idx])
         else: # contingency for when no orders are generated
             best_order_idx = 0
-            self.orders = starting_order
+            print("Warning: No new orders generated, returning Greedy Ascent result:")
+            self.orders = greedy_ascent_order
+            best_order = greedy_ascent_order
         
-        
-        print(ideal_order)
-        best_order = np.array(self.orders[best_order_idx]).flatten()
         print(best_order)
         self.spearman_rho, _ = spearmanr(np.array(ideal_order, dtype=np.float64), np.array(best_order, dtype=np.float64))
         self.kendall_tau, _ = kendalltau(ideal_order, best_order)
@@ -92,15 +86,14 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             raise ValueError("No orders found. Run fit() first.")
         self.best_order = self.orders[np.argmax(self.loglike)]
 
-        log_p_e, log_p_not_e, cdf_p_e, cdf_p_not_e, \
-        left_min, right_max, flip_vec = log_distributions(X, y, 
+        log_p_e, log_p_not_e = log_distributions(X, y, 
                                                  point_proba=False, 
-                                                 distribution=self.distribution, 
-                                                 fitted_cdfs = self.fitted_cdfs,
+                                                 #distribution=self.distribution, 
+                                                 #fitted_cdfs = self.fitted_cdfs,
                                                  **self.dist_params)
 
-        likelihood_matrix = predict_stage(self.best_order, log_p_e, log_p_not_e)
-        return likelihood_matrix
+        #likelihood_matrix = predict_stage(self.best_order, log_p_e, log_p_not_e)
+        return None #likelihood_matrix
     
     def get_params(self):
         return {
