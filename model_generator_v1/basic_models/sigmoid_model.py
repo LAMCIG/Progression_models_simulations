@@ -1,6 +1,6 @@
 import numpy as np
 from typing import Dict, Any
-from model_generator.base_model import BaseModel  # <-- This is the missing import
+from model_generator_v1.base_model import BaseModel  # <-- This is the missing import
 
 class SigmoidModel(BaseModel):
     def __init__(self, n_stages: int, biomarker_params: Dict[int, Dict[str, float]], **kwargs):
