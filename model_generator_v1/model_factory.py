@@ -1,6 +1,6 @@
-from model_generator.basic_models import SigmoidModel
+from model_generator_v1.basic_models import SigmoidModel
 # from model_generator.ode_models import LogisticModel
-from model_generator.ode_models import ACPModel
+from model_generator_v1.ode_models import ACPModel
 
 class ModelFactory:
     @staticmethod

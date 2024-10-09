@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Dict, Any
-from model_generator.base_model import BaseModel
-from model_generator.biomarker_utils import get_adjacency_matrix, compute_laplacian_matrix
+from model_generator_v1.base_model import BaseModel
+from model_generator_v1.biomarker_utils import get_adjacency_matrix, compute_laplacian_matrix
 
 
 class ACPModel(BaseModel):
