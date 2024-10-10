@@ -117,8 +117,6 @@ class CanonicalGenerator:
         model_values = simulate_progression_over_stages(transition_matrix, timespan, y_init)
         return model_values.T[1:]
     
-
-    
     # TODO: make mult_logistic_sym a parameter
     # TODO: add param grid for initial conditions
     def _generate_ode_model(self) -> np.ndarray:
