@@ -4,57 +4,6 @@ from scipy.integrate import solve_ivp
 import random
 import sys
 
-#%% TRANSITION MATRIX UTILS
-
-def generate_transition_matrix(size: int, coeff: float) -> np.ndarray:
-    """
-    Generates a symmetric transition matrix with a specified coefficient decay off-diagonal.
-    
-    Parameters:
-    size (int): The size of the square matrix to generate.
-    coeff (float): The coefficient value to fill off-diagonal adjacency positions.
-    
-    Returns:
-    np.ndarray: A symmetric N by N transition matrix of specified size and coefficients.
-    """
-    A = np.eye(size)
-    np.fill_diagonal(A[:-1, 1:], coeff)
-    np.fill_diagonal(A[1:, :-1], coeff)
-    return A.astype(np.float32)
-
-
-def initialize_biomarkers(num_biomarkers, init_value=0.9):
-    """Initializes biomarkers with a fixed initial value for the first biomarker."""
-    y = np.full(num_biomarkers, 1, dtype=np.float32)
-    y[0] = init_value
-    return y
-
-def softplus(x):
-    """Softplus activation function. For smoother curves."""
-    return np.log(1.0 + np.exp(x))
-
-def apply_transition_matrix(A, stages, y_init, alpha=10, delta=0.5):
-    """Applies the transition matrix to simulate biomarker progression for n stages."""
-    y = 1 - y_init
-    if len(np.shape(stages)) == 0:
-        y_out = np.clip(fractional_matrix_power(A, stages) @ y, 0, 1)
-    
-    else:
-        y_out = np.full([np.shape(y)[0], np.shape(stages)[0]], 1.0)
-        for s, j in zip(stages, range(len(stages))):
-            y_out[:, j] = np.clip(fractional_matrix_power(A, s) @ y, 0, 1)
-    y = 1 - y_out
-    
-    y = softplus(alpha * (y - delta)) / softplus(alpha * (1.0 - delta))
-    
-    return y
-
-def simulate_progression_over_stages(transition_matrix, stages, y_init):
-    """Simulates the progression of biomarker values over multiple stages."""
-    return np.array([apply_transition_matrix(transition_matrix, stage, y_init) for stage in stages])
-
-#%% ODE UTILS
-
 def get_adjacency_matrix(matrix_type, size):
     if matrix_type == "Random Zero Diagonal":
         return random_zero_diagonal_matrix(size)
@@ -64,7 +13,6 @@ def get_adjacency_matrix(matrix_type, size):
         return tridiagonal_matrix(size)
     else:
         return tridiagonal_matrix(size)  # default to tridiagonal
-
 
 def random_connectivity_matrix(n, med_frac, source_rate, all_source_connections):
     random.seed(10)
@@ -106,15 +54,6 @@ def random_connectivity_matrix(n, med_frac, source_rate, all_source_connections)
     
     return K
 
-def multi_logistic_deriv(t, x, K):
-    return (np.eye(len(K)) - np.diag(x)) @ K @ x
-
-def solve_ode_system(K, x0, t_span, n_steps):
-    from scipy.integrate import solve_ivp
-    t_eval = np.linspace(t_span[0], t_span[1], n_steps)
-    sol = solve_ivp(lambda t, x: multi_logistic_deriv(t, x, K), t_span, x0, t_eval=t_eval)
-    return sol.t, sol.y.T
-
 def random_zero_diagonal_matrix(size, random_state = 10):
     """Generates an adjacency matrix with zero diagonal."""
     rng = np.random.RandomState(random_state) # fixed random state
@@ -140,10 +79,6 @@ def compute_laplacian_matrix(A):
     degree_matrix = np.diag(np.sum(A, axis=1))
     laplacian_matrix = degree_matrix - A
     return laplacian_matrix
-
-
-
-#%%
 class Graph():
     def __init__(self, vertices):
         self.V = vertices
