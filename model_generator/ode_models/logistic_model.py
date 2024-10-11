@@ -31,7 +31,8 @@ class LogisticModel(BaseDiseaseModel):
 
         # should be able to swap to any connectivity matrix.
         K = get_adjacency_matrix(self.connectivity_matrix_type, n_biomarkers)
-
+        self.connectivity_matrix = K
+        
         # backward integration
         for i in range(zero_ind - 1, -1, -1):
             force = np.zeros_like(f)
@@ -46,6 +47,11 @@ class LogisticModel(BaseDiseaseModel):
             
         self.model_values = x
 
+        return self
+    
+    def get_connectivity_matrix(self):
+        return self.connectivity_matrix
+
         # # dynamically adjust the time
         # adjusted_time_points = self._dynamic_time_adjustment(self.model_values)
         # if len(adjusted_time_points) > len(t):
@@ -59,4 +65,3 @@ class LogisticModel(BaseDiseaseModel):
         #         if i + 1 < len(adjusted_time_points):  # I don't like this adjustment but it works
         #             self.model_values[:, i + 1] = self.model_values[:, i] + dx_dt * step
 
-        return self

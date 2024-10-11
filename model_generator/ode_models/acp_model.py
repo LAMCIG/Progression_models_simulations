@@ -27,6 +27,7 @@ class ACPModel(BaseDiseaseModel):
 
         np.random.seed(random_state)
         A = get_adjacency_matrix(self.matrix_type, n_stages)  # adjacency matrix
+        self.connectivity_matrix = A
         H = compute_laplacian_matrix(A)  # laplacian matrix
 
         t = np.linspace(self.start_time, self.end_time, self.steps)
@@ -62,3 +63,6 @@ class ACPModel(BaseDiseaseModel):
                 self.model_values[:, i] = np.maximum(self.model_values[:, i], 0)  # enforce non-negativity
 
         return self
+
+    def get_connectivity_matrix(self):
+        return self.connectivity_matrix
