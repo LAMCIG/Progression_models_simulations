@@ -11,14 +11,13 @@
         "convergence_threshold": 1e-4,
         "flip_v": true
     },
-    "n_patients": 1000,
-    "dist_params": {
-        "loc": 2.5,
-        "scale": 3.5,
-        "random_state": 10
+    "disease_model_variations":{
+
     },
+    "n_patients": 300,
+    "dist_params": {"loc": 1.0,"scale": 3.5,"random_state": 10},
     "add_noise": true,
-    "noise_levels": [0.1, 0.2, 0.4, 0.7],
+    "noise_levels": [0.1, 0.2, 0.4, 0.6, 0.8],
     "random_state": 2,
     "n_trials": 20,
     "use_prior": true,
