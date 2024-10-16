@@ -1,27 +1,45 @@
 import sys
+import os
+
+sys.path.append('/home/dsemchin/Progression_models_simulations/model_generator')
+sys.path.append('/home/dsemchin/Progression_models_simulations/ebm')
+sys.path.append('/home/dsemchin/Progression_models_simulations/old_model_generator')
+
 import numpy as np
 import pandas as pd
 from scipy.stats import norm, spearmanr, kendalltau
 from model_generator.model_factory import ModelFactory
-from patient_sample_generator.sample_generator import SampleGenerator
+from old_model_generator.sample_generator import SampleGenerator
 from ebm.probability import log_distributions
 from ebm.mcmc import greedy_ascent, mcmc
 import itertools
-import os
 from multiprocessing import Pool
 
+def dprint(var):
+    print(var)
+    print(type(var))
+# created wrappers around each step
 
 ## STEP 1: CREATE THE DISEASE MODEL
 def create_disease_model(model_name, params):
+    print("creating disease model")
     model = ModelFactory.create_model(model_name, **params)
     model.fit()
     # model.plot()
     prior = model.get_connectivity_matrix()
     stage_values = model.transform(X=None)
+    print("complete")
     return stage_values, prior
 
 ## STEP 2: CREATE THE SAMPLE
 def generate_patient_sample(stage_values, n_patients, dist_params, add_noise, noise_std, random_state):
+    print("creating disease model")
+    print(stage_values.shape)
+    print(type(stage_values))
+    dprint(n_patients)
+    dprint(dist_params)
+    dprint(add_noise)
+    dprint(random_state)
     sample = SampleGenerator(
         stage_values=stage_values,
         n_patients=n_patients,
@@ -34,11 +52,13 @@ def generate_patient_sample(stage_values, n_patients, dist_params, add_noise, no
     # sample.plot_stage_histogram()
     X = sample.get_X()
     y = sample.get_y()
+    print("complete")
     return X, y, sample
 
 ## STEP 3: RUN EBM
 # define how ebm is run
 def run_ebm(X, y, prior=None, random_state=1):
+    print("running EBM")
     log_p_e, log_p_not_e = log_distributions(X, y, point_proba=False)
     rng = np.random.RandomState(random_state)
     ideal_order = np.arange(X.shape[1])
@@ -69,8 +89,7 @@ def run_ebm(X, y, prior=None, random_state=1):
     }
 
 # single wrapper for parallel trials
-def run_single_trial(args):
-    X, y, prior, trial = args
+def run_single_trial(X, y, prior, trial):
     result = run_ebm(X, y, prior=prior, random_state=trial)
     return {
         'run': trial,
@@ -85,52 +104,39 @@ def run_single_trial(args):
         'best_kendalltau': result['kendalltau'][2],
         'num_iters': result['num_iters']
     }
-
-# parallelized version of run_multiple_ebm
-def run_multiple_ebm(X, y, prior, n_trials, csv_filename, n_workers=4):
+    
+def run_multiple_ebm(X, y, prior, n_trials, csv_filename, n_workers=10):
     output_dir = os.path.dirname(csv_filename)
-    if not os.path.exists(output_dir):
+    if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    # args list for all trials
     args_list = [(X, y, prior, trial) for trial in range(n_trials)]
-    
-    # execute trials in parallel
+
     with Pool(processes=n_workers) as pool:
-        results_list = pool.map(run_single_trial, args_list)
+        results_list = pool.starmap(run_single_trial, list(args_list))
     
-    # save results to CSV
     df = pd.DataFrame(results_list)
     df.to_csv(csv_filename, index=False)
     print(f"Results saved to {csv_filename}")
     
-    df = pd.DataFrame(results_list)
-    df.to_csv(csv_filename, index=False)
-    
 
 def run_simulation(config):
-    # Extract the varying disease model parameters
+    # get the json file
     disease_model_variations = config['disease_model_variations']
 
-    # Generate all combinations of the varying disease model parameters
     param_keys = list(disease_model_variations.keys())
     param_values = list(itertools.product(*disease_model_variations.values()))
     
-    # Iterate over each combination of disease model parameters
     for param_set in param_values:
         current_params = dict(zip(param_keys, param_set))
-        
-        # Merge current parameter set with the fixed disease model params
         disease_model_params = {**config['disease_model_params'], **current_params}
-        
-        # Step 1: Create the disease model
         stage_values, prior = create_disease_model(
             config['model_name'], disease_model_params
         )
         
-        # Step 2: Iterate over noise levels and run simulations for each
+        # this was a pretty bad idea in hindsight TODO: remove loop
+        
         for noise_std in config['noise_levels']:
-            # Generate patient sample with current noise level
             X, y, sample = generate_patient_sample(
                 stage_values=stage_values,
                 n_patients=config['n_patients'],
@@ -140,16 +146,15 @@ def run_simulation(config):
                 random_state=config['random_state']
             )
             
-            # Construct filenames dynamically based on both noise and disease model parameters
+            # construct filenames dynamically based on both noise and disease model parameters
             param_str = '_'.join([f"{key}_{value}" for key, value in current_params.items()])
             no_prior_csv = f"{config['base_csv_name']}_{param_str}_noise_{noise_std}_no_prior.csv"
             with_prior_csv = f"{config['base_csv_name']}_{param_str}_noise_{noise_std}_with_prior.csv"
             
-            # Get the number of workers from the config
+            # get the number of workers from the config
             n_workers = config.get('n_workers', 5)
             
-            # Step 3: Run inference in parallel
-            print(f"Running without prior for noise {noise_std} and params {current_params}")
+            # step 3: Run inference in parallel
             run_multiple_ebm(X=X, y=y, prior=None, n_trials=config['n_trials'], csv_filename=no_prior_csv, n_workers=n_workers)
             
             if config['use_prior']:
@@ -165,3 +170,7 @@ if __name__ == "__main__":
         config = json.load(f)
     
     run_simulation(config)
+# import json
+# with open("configs/noise_acp.json", "r") as f:
+#     config = json.load(f)
+# run_simulation(config)

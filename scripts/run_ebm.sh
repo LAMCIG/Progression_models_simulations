@@ -8,11 +8,6 @@
 CONFIG_FILE=$1
 echo "Config file passed: $CONFIG_FILE" >> /home/dsemchin/Progression_models_simulations/logs/debug.log
 
-if [ -z "$CONFIG_FILE" ]; then
-    echo "Error: No configuration file provided." >> /home/dsemchin/Progression_models_simulations/logs/debug.log
-    exit 1
-fi
-
 PYTHON_EXEC=~/miniconda3/bin/python
 SCRIPT_PATH=/home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py
 

@@ -1,0 +1,15 @@
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py configs/noise_acp_localshift.json
+Config file passed: configs/noise_acp_localshift.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py configs/noise_acp_localshift.json
+Config file passed: /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Config file passed: /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Config file passed: /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Config file passed: 
+Error: No configuration file provided.
