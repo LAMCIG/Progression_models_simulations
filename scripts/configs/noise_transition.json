@@ -1,19 +1,14 @@
 {
-    "model_name": "acp",
+    "model_name": "transition",
     "disease_model_params": {
         "n_stages": 10,
-        "random_state": 10,
+        "coeff": 0.55e-1, 
         "start_time": 0,
-        "end_time": 150,
-        "steps": 200,
-        "staging": "whole",
-        "matrix_type": "Tridiagonal",
-        "convergence_threshold": 1e-4,
-        "flip_v": true
+        "end_time": 100,
+        "steps": 100,
+        "convergence_threshold": 1e-4
     },
-    "disease_model_variations":{
-
-    },
+    "disease_model_variations":{},
     "n_patients": [100, 250, 500, 1000],
     "dist_params": {"loc": 2.5,"scale": 3.5,"random_state": 10},
     "add_noise": true,
@@ -21,6 +16,6 @@
     "random_state": 2,
     "n_trials": 20,
     "use_prior": true,
-    "base_csv_name": "ACP_results",
-    "n_workers": 5
+    "base_csv_name": "Transition_results",
+    "n_workers": 10
 }
