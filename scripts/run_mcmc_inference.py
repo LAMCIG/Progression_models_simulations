@@ -85,7 +85,10 @@ def run_ebm(X, y, prior=None, random_state=1):
         'kendalltau': [kendalltau(ideal_order, starting_order_copy)[0],
                        kendalltau(ideal_order, order)[0],
                        kendalltau(ideal_order, best_order)[0]],
-        'num_iters': len(orders) if orders is not None else 0
+        'num_iters': len(orders) if orders is not None else 0,
+        'loglike': loglike,
+        'log_PE': log_p_e,
+        'log_not_PE': log_p_not_e 
     }
 
 # single wrapper for parallel trials
@@ -135,30 +138,24 @@ def run_simulation(config):
         )
         
         # this was a pretty bad idea in hindsight TODO: remove loop
-        
-        for noise_std in config['noise_levels']:
-            X, y, sample = generate_patient_sample(
-                stage_values=stage_values,
-                n_patients=config['n_patients'],
-                dist_params=config['dist_params'],
-                add_noise=config['add_noise'],
-                noise_std=noise_std,
-                random_state=config['random_state']
-            )
-            
-            # construct filenames dynamically based on both noise and disease model parameters
-            param_str = '_'.join([f"{key}_{value}" for key, value in current_params.items()])
-            no_prior_csv = f"{config['base_csv_name']}_{param_str}_noise_{noise_std}_no_prior.csv"
-            with_prior_csv = f"{config['base_csv_name']}_{param_str}_noise_{noise_std}_with_prior.csv"
-            
-            # get the number of workers from the config
-            n_workers = config.get('n_workers', 5)
-            
-            # step 3: Run inference in parallel
-            run_multiple_ebm(X=X, y=y, prior=None, n_trials=config['n_trials'], csv_filename=no_prior_csv, n_workers=n_workers)
-            
-            if config['use_prior']:
-                print(f"Running with prior for noise {noise_std} and params {current_params}")
+        for n_patients in config['n_patients']:
+            for noise_std in config['noise_levels']:
+                X, y, sample = generate_patient_sample(
+                    stage_values=stage_values,
+                    n_patients=n_patients,
+                    dist_params=config['dist_params'],
+                    add_noise=config['add_noise'],
+                    noise_std=noise_std,
+                    random_state=config['random_state']
+                )
+                
+                # construct filenames dynamically based on both noise and disease model parameters
+                param_str = '_'.join([f"{key}_{value}" for key, value in current_params.items()])
+                no_prior_csv = f"{config['base_csv_name']}_n_{n_patients}_std_{noise_std}_no_prior.csv"
+                with_prior_csv = f"{config['base_csv_name']}_{param_str}_n_{n_patients}_std_{noise_std}_with_prior.csv"
+                
+                n_workers = config.get('n_workers', 10)
+                run_multiple_ebm(X=X, y=y, prior=None, n_trials=config['n_trials'], csv_filename=no_prior_csv, n_workers=n_workers)
                 run_multiple_ebm(X=X, y=y, prior=prior, n_trials=config['n_trials'], csv_filename=with_prior_csv, n_workers=n_workers)
 
 
