@@ -5,7 +5,9 @@
 #$ -cwd
 #$ -j y
 
-CONFIG_FILE=$1
+
+CONFIG_FILE="/home/dsemchin/Progression_models_simulations/configs/noise_logistic.json"
+LOG_FILE="/home/dsemchin/Progression_models_simulations/logs/debug.log"
 echo "Config file passed: $CONFIG_FILE" >> /home/dsemchin/Progression_models_simulations/logs/debug.log
 
 PYTHON_EXEC=~/miniconda3/bin/python
