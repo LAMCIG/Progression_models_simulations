@@ -13,3 +13,11 @@ Config file passed: /home/dsemchin/Progression_models_simulations/scripts/config
 Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
 Config file passed: 
 Error: No configuration file provided.
+Config file passed: /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Config file passed: /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Config file passed: /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py /home/dsemchin/Progression_models_simulations/scripts/configs/noise_acp.json
+Config file passed: 
+Running command: /home/dsemchin/miniconda3/bin/python /home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py 
