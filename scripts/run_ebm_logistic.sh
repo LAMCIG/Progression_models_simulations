@@ -1,18 +1,10 @@
 #!/bin/bash
-#$ -S /bin/bash
-#$ -o /home/dsemchin/Progression_models_simulations/logs/output.log
-#$ -e /home/dsemchin/Progression_models_simulations/logs/error.log
-#$ -cwd
-#$ -j y
+#PBS -S /bin/bash
+#PBS -o /home/$dsemchin/log -j y
+#PBS -l nodes=1:ppn=15  # Adjust the number of cores
+#PBS -l walltime=12:00:00  # Adjust wall time based on the expected duration
 
+cd /home/dsemchin/Progression_models_simulations/scripts
 
-CONFIG_FILE="/home/dsemchin/Progression_models_simulations/configs/noise_logistic.json"
-LOG_FILE="/home/dsemchin/Progression_models_simulations/logs/debug.log"
-echo "Config file passed: $CONFIG_FILE" >> /home/dsemchin/Progression_models_simulations/logs/debug.log
-
-PYTHON_EXEC=~/miniconda3/bin/python
-SCRIPT_PATH=/home/dsemchin/Progression_models_simulations/scripts/run_mcmc_inference.py
-
-echo "Running command: ${PYTHON_EXEC} ${SCRIPT_PATH} ${CONFIG_FILE}" >> /home/dsemchin/Progression_models_simulations/logs/debug.log
-cmd="${PYTHON_EXEC} ${SCRIPT_PATH} ${CONFIG_FILE}"
-eval $cmd
+# Run the Python script
+python3 run_ebm_logistic.py
