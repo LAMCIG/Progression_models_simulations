@@ -103,7 +103,7 @@ class SampleGenerator(BaseEstimator, TransformerMixin):
 
     def plot_stage_histogram(self):
         """Plots histogram of patient stages."""
-        sns.histplot(self.patient_samples['stage'], bins=self.stage_values.shape[1], kde=False, color='skyblue', edgecolor='black')
+        sns.histplot(self.patient_samples['stage'], bins=self.stage_values.shape[1], kde=False, color='skyblue')
         plt.xlabel('Disease Stage')
         plt.ylabel('Number of Patients')
         plt.title('Distribution of Patient Stages')
