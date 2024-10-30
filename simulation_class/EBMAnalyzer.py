@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.stats import norm, spearmanr, kendalltau
-from .ebm.probability_legacy import log_distributions, predict_stage
+from .ebm.probability_transformer import log_distributions, predict_stage
 from .ebm.mcmc import greedy_ascent, mcmc
 from .ebm.likelihood import EventProbabilities
 import matplotlib.pyplot as plt
@@ -31,23 +31,16 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if y is not None and not np.all(np.isfinite(y)):
             raise ValueError("The data in y contains non-finite values (NaN or Inf).")
         
-        self.log_p_e, self.log_p_not_e, \
-        cdf_p_e, cdf_p_not_e, left_min, right_max, flip_vec = log_distributions(X, y, 
-                                                 point_proba=False, 
-                                                 #distribution=self.distribution, 
-                                                 **self.dist_params)
+        self.log_p_e, self.log_p_not_e = log_distributions(X, y, point_proba=False, **self.dist_params)#distribution=self.distribution
         self.fitted_cdfs = []
-        self.fitted_cdfs.append(cdf_p_e)
-        self.fitted_cdfs.append(cdf_p_not_e)
-        self.fitted_cdfs.append(left_min)
-        self.fitted_cdfs.append(right_max)
-        self.fitted_cdfs.append(flip_vec)
 
         starting_order = np.arange(X.shape[1])
+        self.starting_order = starting_order
         ideal_order = np.arange(X.shape[1])
         np.random.shuffle(starting_order)
         starting_tau, _ = kendalltau(ideal_order, starting_order)
-        print(f"Starting Order: {starting_order}, kendall-tau:{starting_tau}")
+        starting_smr, _ = spearmanr(ideal_order, starting_order)
+        print(f"Starting Order: {starting_order}, kendall-tau:{starting_tau}, spearmanr: {starting_smr}")
 
         order, loglike, update_iters = greedy_ascent(self.log_p_e, 
                                                      self.log_p_not_e, 
@@ -57,6 +50,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020
                                                      )
         
+        self.greedy_ascent = starting_order
         print(f"Greedy Ascent Result: {starting_order}")
 
         orders, loglike, update_iters, probas = mcmc(self.log_p_e, 
@@ -67,6 +61,7 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
                                                      random_state=2020
                                                      )
         
+        print(orders)
         
         if len(loglike) > 0:
             best_order_idx = np.argmax(loglike)
@@ -76,10 +71,10 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             self.orders = starting_order
         
         
-        print(ideal_order)
-        best_order = np.array(self.orders[best_order_idx]).flatten()
-        print(best_order)
-        self.spearman_rho, _ = spearmanr(np.array(ideal_order, dtype=np.float64), np.array(best_order, dtype=np.float64))
+        best_order = np.array(self.orders[best_order_idx])
+        print(f"Best Order:{best_order}")
+        
+        self.spearman_rho, _ = spearmanr(ideal_order, best_order)
         self.kendall_tau, _ = kendalltau(ideal_order, best_order)
         self.loglike = loglike
         self.update_iters = update_iters
@@ -91,15 +86,11 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
         if self.orders is None:
             raise ValueError("No orders found. Run fit() first.")
         self.best_order = self.orders[np.argmax(self.loglike)]
+        print(X.shape)
+        print(y.shape)     
+        self.log_p_e, self.log_p_not_e = log_distributions(X, y, point_proba=False, **self.dist_params)
 
-        log_p_e, log_p_not_e, cdf_p_e, cdf_p_not_e, \
-        left_min, right_max, flip_vec = log_distributions(X, y, 
-                                                 point_proba=False, 
-                                                 #distribution=self.distribution, 
-                                                 fitted_cdfs = self.fitted_cdfs,
-                                                 **self.dist_params)
-
-        likelihood_matrix = predict_stage(self.best_order, log_p_e, log_p_not_e)
+        likelihood_matrix = predict_stage(self.best_order, self.log_p_e, self.log_p_not_e)
         return likelihood_matrix
     
     def get_params(self):
@@ -110,7 +101,9 @@ class EBMAnalyzer(BaseEstimator, TransformerMixin):
             'probas': self.probas,
             'best_order': self.best_order,
             'spearman_rho': self.spearman_rho,
-            'kendall_tau': self.kendall_tau
+            'kendall_tau': self.kendall_tau,
+            'greedy_ascent': self.greedy_ascent,
+            'starting_order': self.starting_order
         }
         
     def summary(self):

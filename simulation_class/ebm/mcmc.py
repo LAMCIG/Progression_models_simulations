@@ -97,7 +97,7 @@ def get_optimal_order(orders: list):
                 break
     best_order = np.array(best_order)  
     
-    print(f"Order Map: \n{order_map}")
+    #print(f"Order Map: \n{order_map}")
     print(f"Best Order: {best_order}")
     
     return order_map, best_order
