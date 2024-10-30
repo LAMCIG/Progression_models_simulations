@@ -41,6 +41,8 @@ class CanonicalGenerator:
         """
         if self.model_type == 'sigmoid':
             return self._generate_sigmoid_model()
+        if self.model_type == 'inv_sigmoid':
+            return self._generate_inv_sigmoid_model()
         elif self.model_type == 'transition_matrix':
             return self._generate_transition_matrix_model()
         elif self.model_type == 'logistic':
@@ -71,6 +73,20 @@ class CanonicalGenerator:
         return model_values
 
     def _generate_sigmoid_model(self) -> np.ndarray:
+        def sigmoid(x, s, c):
+            return 1 / (1 + np.exp(-s * (x - c)))
+
+        x = np.linspace(-50, 120, 1000) # arbitrary domain for sigmoid model
+        model_values = np.zeros((self.n_biomarker_stages, len(x)))
+        
+        for biomarker, params in self.biomarkers_params.items():
+            s = params['s']
+            c = params['c']
+            model_values[biomarker] = sigmoid(x, s, c)
+
+        return model_values
+    
+    def _generate_inv_sigmoid_model(self) -> np.ndarray:
         def sigmoid(x, s, c):
             return 1 - 1 / (1 + np.exp(-s * (x - c)))
 
