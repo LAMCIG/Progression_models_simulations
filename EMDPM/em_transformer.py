@@ -18,17 +18,20 @@ class EM(BaseEstimator, TransformerMixin):
                  t_max: float = 12, step: float = 0.01,
                  K: np.ndarray = None, use_jacobian: bool = False,
                  lamda: float = 0.01,
-                 alpha: float = 1 # scalar param on matrix
+                 alpha: float = 1, # scalar param on matrix
+                 lambda_cog: float = 0
                  ):
-        # separate attributes and paramaters
-        
+
         self.num_iterations = num_iterations
         self.t_max = t_max
         self.step = step
         self.K = K
         self.use_jacobian = use_jacobian
-        self.lamda = lamda # TODO: consider refactoring to like "lasso_penalty" or something, ask BG
+        
+        # hyperparameters
+        self.lamda = lamda # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
         self.alpha = alpha
+        self.lambda_cog = lambda_cog
         
         ## attributes for switching logic
         self.best_lse = np.inf
@@ -72,10 +75,11 @@ class EM(BaseEstimator, TransformerMixin):
                                       self.K_,
                                       self.t_span,
                                       use_jacobian=self.use_jacobian,
-                                      lamda = self.lamda
+                                      lamda = self.lamda,
+                                      alpha= self.alpha
                                       )
-            x_reconstructed = solve_system(x0_fit, f_fit, self.K_, self.t_span)
-
+            
+            x_reconstructed = solve_system(x0_fit, f_fit, self.K_, self.t_span, self.alpha)
             beta_estimates = {}
             lse = 0
             # best_lse = np.inf
@@ -83,15 +87,20 @@ class EM(BaseEstimator, TransformerMixin):
             # TODO: Attempt parallel beta computation
             ### beta comuputaiton
             for patient_id, df_patient in df_copy.groupby("patient_id"):
-                beta_i = estimate_beta_for_patient(df_patient, x_reconstructed, self.t_span, self.t_max, use_jacobian=self.use_jacobian)
+                beta_i = estimate_beta_for_patient(df_patient,
+                                                   x_reconstructed,
+                                                   self.t_span,
+                                                   self.t_max,
+                                                   use_jacobian=self.use_jacobian,
+                                                   lambda_cog = self.lambda_cog)
                 beta_estimates[patient_id] = beta_i
 
                 x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
                 
                 if self.use_jacobian == True:
-                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span)
+                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, df_patient["cognitive_score"].values, self.lambda_cog)
                 else:
-                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span)
+                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, df_patient["cognitive_score"].values, self.lambda_cog)
                 lse += res
 
             if self.use_jacobian and lse > best_lse and not jacobian_switched:
