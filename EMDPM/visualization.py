@@ -69,13 +69,13 @@ def plot_theta_fit_comparison(t: np.ndarray, t_span: np.ndarray, x_true: np.ndar
     plt.title("intial vs. predicted vs. true curve")
     plt.show()
 
-def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_iterations: int) -> None:
+def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_iterations: int, f_true: np.ndarray) -> None:
     """
     Plots the mean absolute error for x0 and f over iterations.
     """
     x0_true = np.zeros(n_biomarkers)
-    f_true = np.zeros(n_biomarkers)
-    f_true[0] = 0.01
+    # f_true = np.zeros(n_biomarkers)
+    # f_true[0] = 0.01
     x0_error_history = []
     f_error_history = []
     for iteration in range(num_iterations):

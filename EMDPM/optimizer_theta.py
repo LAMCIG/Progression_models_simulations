@@ -8,7 +8,7 @@ from .utils import solve_system
 
 def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
                K: np.ndarray, step: float = 0.1, t_span: np.ndarray = None,
-               lamda: float = 1) -> tuple:
+               lamda: float = 1, alpha: float = 1) -> tuple:
     """
     Computes residual loss and gradient for estimating the ODE forcing term f.
 
@@ -39,7 +39,7 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     f = params
     sparsity_penalty = lamda * np.sum(np.abs(f))
 
-    x = solve_system(x0, f, K, t_span)
+    x = solve_system(x0, f, K, t_span, alpha)
 
     x_pred = np.zeros((n_biomarkers, len(t_obs)))
     for j in range(n_biomarkers):
@@ -52,7 +52,7 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
 
 def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
                K: np.ndarray, step: float = 0.1, t_span: np.ndarray = None,
-               lamda: float = 0.01) -> tuple:
+               lamda: float = 0.01, alpha: float = 1) -> tuple:
     """
     Computes residual loss and gradient for estimating the ODE forcing term f.
 
@@ -83,7 +83,7 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     f = params
     sparsity_penalty = lamda * np.sum(np.abs(f))
 
-    x = solve_system(x0, f, K, t_span)
+    x = solve_system(x0, f, K, t_span, alpha)
 
     x_pred = np.zeros((n_biomarkers, len(t_obs)))
     for j in range(n_biomarkers):
@@ -106,8 +106,11 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
 
     return loss, grad_f
 
-def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame, iteration: int,
-              K: np.ndarray, t_span: np.ndarray, step: float = 0.1, use_jacobian: bool = False, lamda: float = 1) -> tuple:
+def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
+              iteration: int, K: np.ndarray,
+              t_span: np.ndarray, step: float = 0.1,
+              use_jacobian: bool = False, lamda: float = 1,
+              alpha: float = 1.0) -> tuple:
     """
     Optimizes the ODE forcing term f (theta) for current EM iteration.
 
@@ -152,7 +155,7 @@ def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame, iteration: int,
     result = minimize(
         loss_function,
         f_guess,
-        args=(t_obs, x_obs, K, step, t_span, lamda),
+        args=(t_obs, x_obs, K, step, t_span, lamda, alpha),
         method="L-BFGS-B",
         jac=use_jacobian,
         bounds=bounds

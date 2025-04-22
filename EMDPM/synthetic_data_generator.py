@@ -69,7 +69,6 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
     df = pd.DataFrame(X, columns=columns)
 
     return df, beta_true_dict
-
 def initialize_beta(df: pd.DataFrame, beta_range: tuple = (0, 12), seed: int = 75) -> pd.DataFrame:
     """
     Uniformly randomly initialize beta values for each patient ID.

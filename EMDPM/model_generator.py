@@ -66,6 +66,8 @@ def multi_logistic_deriv_force(t, x, K, f):
     """
     Compute the time derivative dx/dt for the multivariate logistic system.
 
+    dx/dt = (I - diag(x)) @ (K @ x + f)
+
     Parameters
     ----------
     t : float
@@ -130,4 +132,4 @@ def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_ma
     sol = solve_ivp(multi_logistic_deriv_force, t_span=[0, t_max], y0=x0, args=(K, f),
                     t_eval=t_eval, method="DOP853")
 
-    return sol.t, sol.y, K
+    return sol.t, sol.y, K, x0, f
