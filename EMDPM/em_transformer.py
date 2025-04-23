@@ -140,22 +140,22 @@ class EM(BaseEstimator, TransformerMixin):
 
         return self
 
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        """
-        Append final estimated beta and t_ij to original DataFrame.
+    # def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+    #     """
+    #     Append final estimated beta and t_ij to original DataFrame.
 
-        Parameters
-        ----------
-        X : pd.DataFrame
-            Original input DataFrame.
+    #     Parameters
+    #     ----------
+    #     X : pd.DataFrame
+    #         Original input DataFrame.
 
-        Returns
-        -------
-        pd.DataFrame
-            Updated DataFrame with final beta and t_ij columns.
-        """
-        df_copy = X.copy()
-        final_iter = str(self.num_iterations - 1)
-        df_copy["beta"] = self.beta_iter_[final_iter]
-        df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
-        return df_copy
+    #     Returns
+    #     -------
+    #     pd.DataFrame
+    #         Updated DataFrame with final beta and t_ij columns.
+    #     """
+    #     df_copy = X.copy()
+    #     final_iter = str(self.num_iterations - 1)
+    #     df_copy["beta"] = self.beta_iter_[final_iter]
+    #     df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
+    #     return df_copy

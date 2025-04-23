@@ -73,29 +73,29 @@ def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_it
     """
     Plots the mean absolute error for x0 and f over iterations.
     """
-    x0_true = np.zeros(n_biomarkers)
+    # x0_true = np.zeros(n_biomarkers)
     # f_true = np.zeros(n_biomarkers)
     # f_true[0] = 0.01
-    x0_error_history = []
+    #x0_error_history = []
     f_error_history = []
     for iteration in range(num_iterations):
         theta_column = f"iter_{iteration}"
         if theta_column in theta_iter.columns:
-            x0_estimated = theta_iter[theta_column].values[:n_biomarkers]
+            #x0_estimated = theta_iter[theta_column].values[:n_biomarkers]
+            #x0_error = np.mean(np.abs(x0_true - x0_estimated))
+            #x0_error_history.append(x0_error)
             f_estimated = theta_iter[theta_column].values[n_biomarkers:]
-            x0_error = np.mean(np.abs(x0_true - x0_estimated))
-            f_error = np.mean(np.abs(f_true - f_estimated))
-            x0_error_history.append(x0_error)
+            f_error = np.mean(np.abs(f_true - f_estimated)) / np.mean(f_true)
             f_error_history.append(f_error)
     plt.figure(figsize=(10, 4))
-    plt.plot(range(num_iterations), x0_error_history, label="x0 Error")
+    #plt.plot(range(num_iterations), x0_error_history, label="x0 Error")
     plt.plot(range(num_iterations), f_error_history, label="f Error")
     plt.xlabel("iteration")
     plt.ylabel("error")
     plt.legend()
     plt.show()
 
-def plot_beta_overlay(df: pd.DataFrame, beta_iter: pd.DataFrame, theta_iter: pd.DataFrame, t_span: np.ndarray, n_biomarkers: int, x_init: np.ndarray, x_final: np.ndarray, iteration: int = -1, patient_range=(40, 50)) -> None:
+def plot_beta_overlay(df: pd.DataFrame, beta_iter: pd.DataFrame, theta_iter: pd.DataFrame, t_span: np.ndarray, n_biomarkers: int, x_init: np.ndarray, x_final: np.ndarray, iteration: int = -1, patient_range=(0, 10)) -> None:
     """
     Plots vertical lines for beta guesses vs true across patients with fitted curve.
     """
