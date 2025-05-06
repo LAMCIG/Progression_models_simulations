@@ -8,7 +8,7 @@ from scipy.integrate import solve_ivp
 
 # TODO: Migrate the seed to the class or the 
 
-def get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, seed):
+def get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, rng):
     """
     Generate a connectivity matrix representing brain region interactions.
 
@@ -34,11 +34,10 @@ def get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, seed):
         return matrix
 
     if connectivity_matrix_type == 'random_offdiag':
-        np.random.seed(seed)
         matrix = np.zeros((n_biomarkers, n_biomarkers))
 
         # fully connect first offdiag
-        first_off_diag_values = np.random.random(n_biomarkers - 1)
+        first_off_diag_values = rng.random(n_biomarkers - 1)
         np.fill_diagonal(matrix[1:], first_off_diag_values)
         np.fill_diagonal(matrix[:, 1:], first_off_diag_values)
 
@@ -46,10 +45,10 @@ def get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, seed):
         for offset in range(2, 3):  # just 2nd and 3rd for now
             sparsity = 0.1 * offset
             scale = 1 / offset
-            random_values = np.random.random(size=n_biomarkers - offset) * scale
+            random_values = rng.random(size=n_biomarkers - offset) * scale
 
             # apply sparsity mask (higher offset = more zeros)
-            mask = np.random.rand(n_biomarkers - offset) > sparsity
+            mask = rng.random(n_biomarkers - offset) > sparsity
             random_values *= mask  # Zero out some connections
 
             np.fill_diagonal(matrix[offset:], random_values)
@@ -89,7 +88,7 @@ def multi_logistic_deriv_force(t, x, K, f):
     x = np.maximum(x, 0)
     return (np.eye(K.shape[0]) - np.diag(x)) @ (K @ x) + f
 
-def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_matrix_type='random_offdiag', seed = 75):
+def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_matrix_type='random_offdiag', seed = 75, rng = None):
     """
     Generate a synthetic multivariate logistic progression model.
     dx/dt = (I - diag(x)) @ (K @ x + f)
@@ -116,10 +115,12 @@ def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_ma
     K : np.ndarray
         Connectivity matrix used in the simulation.
     """
+    if rng is None:
+        rng = np.random.default_rng(seed)
+    
     t_eval = np.arange(0, t_max, step)
-
     x0 = np.zeros(n_biomarkers)
-    f = np.random.gamma(shape=2, scale=0.005, size=n_biomarkers)
+    f = rng.gamma(shape=2, scale=0.005, size=n_biomarkers)
 
     x0[x0 < 0.01] = 0  # probably unnecessary but just to get rid of some small values
     f[f < 0.01] = 0
@@ -128,7 +129,7 @@ def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_ma
     print(f"true x0: {x0}")
     print(f"true f: {f}")
 
-    K = get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, seed)
+    K = get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, rng)
     sol = solve_ivp(multi_logistic_deriv_force, t_span=[0, t_max], y0=x0, args=(K, f),
                     t_eval=t_eval, method="DOP853")
 
