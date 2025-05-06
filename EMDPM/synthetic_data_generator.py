@@ -6,7 +6,7 @@ from .model_generator import generate_logistic_model
 def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_level: float = 0.0,
                             n_patients: int = 200, n_patient_obs: int = 3,
                             x_true: np.ndarray = None, t: np.ndarray = None,
-                            seed: int = 75) -> tuple:
+                            seed: int = 75, rng: np.random.Generator = None) -> tuple:
     """
     Generate synthetic longitudinal patient data from a multivariate logistic model.
 
@@ -36,11 +36,9 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
         beta_true_dict : dict
             Ground truth beta values per patient.
     """
-    
-    np.random.seed(seed)
-    random.seed(seed)
-    
-    
+    if rng is None:
+        rng = np.random.default_rng(seed)
+
     if x_true is None or t is None:
         t, x_true, _ = generate_logistic_model(n_biomarkers=n_biomarkers, t_max=t_max)
 
@@ -48,18 +46,18 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
     X = []
 
     for patient_id in range(n_patients):
-        visit_interval = np.random.gamma(shape=2, scale=0.5)
-        first_visit = np.random.uniform(0, t_max - (n_patient_obs * visit_interval))
+        visit_interval = rng.gamma(shape=2, scale=0.5)
+        first_visit = rng.uniform(0, t_max - (n_patient_obs * visit_interval))
 
         t_obs = np.array([first_visit + i * visit_interval for i in range(n_patient_obs)])
         t_obs = t_obs.clip(0, t_max)
 
         t_cumsum = np.insert(np.cumsum(np.diff(t_obs)), 0, 0)
 
-        x_obs = x_true[:, np.searchsorted(t, t_obs)] + np.random.normal(0, noise_level, (n_biomarkers, n_patient_obs))
+        x_obs = x_true[:, np.searchsorted(t, t_obs)] + rng.normal(0, noise_level, (n_biomarkers, n_patient_obs))
         x_obs = x_obs.clip(0, 1)
 
-        cognitive_scores = t_obs + np.random.normal(0, 1, size=n_patient_obs)
+        cognitive_scores = t_obs + rng.normal(0, 1, size=n_patient_obs)
         beta_true_dict[patient_id] = first_visit
 
         for i in range(n_patient_obs):
@@ -69,7 +67,8 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
     df = pd.DataFrame(X, columns=columns)
 
     return df, beta_true_dict
-def initialize_beta(df: pd.DataFrame, beta_range: tuple = (0, 12), seed: int = 75) -> pd.DataFrame:
+
+def initialize_beta(df: pd.DataFrame, beta_range: tuple = (0, 12), seed: int = 75, rng: np.random.Generator= None) -> pd.DataFrame:
     """
     Uniformly randomly initialize beta values for each patient ID.
 
@@ -84,13 +83,14 @@ def initialize_beta(df: pd.DataFrame, beta_range: tuple = (0, 12), seed: int = 7
     -------
     pd.DataFrame
         DataFrame with patient_id and initial beta column "0".
-    """
-    np.random.seed(seed)
-    random.seed(seed)
+    """    
+    if rng is None:
+        rng = np.random.default_rng(seed)
+
     
     df = df.copy()
     patient_ids = df["patient_id"].unique()
-    beta_values = np.random.uniform(beta_range[0], beta_range[1], size=len(patient_ids))
+    beta_values = rng.uniform(beta_range[0], beta_range[1], size=len(patient_ids))
 
     beta_map = dict(zip(patient_ids, beta_values))
     beta_column = df["patient_id"].map(beta_map)

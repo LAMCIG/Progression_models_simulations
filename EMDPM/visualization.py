@@ -130,7 +130,7 @@ def plot_beta_error_history(beta_iter: pd.DataFrame, df: pd.DataFrame, num_itera
     plt.figure(figsize=(10, 5))
     plt.plot(range(1, len(beta_error_history) + 1), beta_error_history)
     plt.xlabel("iteration")
-    plt.ylabel("mean error")
+    plt.ylabel("mean beta error")
     plt.show()
     
 def plot_lse(lse_array: list) -> None:
