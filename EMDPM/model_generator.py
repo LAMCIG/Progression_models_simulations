@@ -88,7 +88,7 @@ def multi_logistic_deriv_force(t, x, K, f):
     x = np.maximum(x, 0)
     return (np.eye(K.shape[0]) - np.diag(x)) @ (K @ x) + f
 
-def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_matrix_type='random_offdiag', seed = 75, rng = None):
+def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_matrix_type='random_offdiag', scalar_K = 1.0,seed = 75, rng = None):
     """
     Generate a synthetic multivariate logistic progression model.
     dx/dt = (I - diag(x)) @ (K @ x + f)
@@ -130,7 +130,9 @@ def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_ma
     print(f"true f: {f}")
 
     K = get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, rng)
-    sol = solve_ivp(multi_logistic_deriv_force, t_span=[0, t_max], y0=x0, args=(K, f),
+    K_scaled = scalar_K * K
+    
+    sol = solve_ivp(multi_logistic_deriv_force, t_span=[0, t_max], y0=x0, args=(K_scaled, f),
                     t_eval=t_eval, method="DOP853")
 
-    return sol.t, sol.y, K, x0, f
+    return sol.t, sol.y, K, x0, f, scalar_K

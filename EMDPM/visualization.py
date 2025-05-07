@@ -69,27 +69,44 @@ def plot_theta_fit_comparison(t: np.ndarray, t_span: np.ndarray, x_true: np.ndar
     plt.title("intial vs. predicted vs. true curve")
     plt.show()
 
-def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_iterations: int, f_true: np.ndarray) -> None:
+def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_iterations: int,
+                             f_true: np.ndarray, a_true: np.ndarray, b_true: np.ndarray,
+                             scalar_K_true: float) -> None:
     """
-    Plots the mean absolute error for x0 and f over iterations.
+    Plots normalized error of each parameter group over EM iterations.
     """
-    # x0_true = np.zeros(n_biomarkers)
-    # f_true = np.zeros(n_biomarkers)
-    # f_true[0] = 0.01
-    #x0_error_history = []
     f_error_history = []
+    a_error_history = []
+    b_error_history = []
+    scalar_K_error_history = []
+
     for iteration in range(num_iterations):
         theta_column = f"iter_{iteration}"
-        if theta_column in theta_iter.columns:
-            #x0_estimated = theta_iter[theta_column].values[:n_biomarkers]
-            #x0_error = np.mean(np.abs(x0_true - x0_estimated))
-            #x0_error_history.append(x0_error)
-            f_estimated = theta_iter[theta_column].values[n_biomarkers:]
-            f_error = np.mean(np.abs(f_true - f_estimated)) / np.mean(f_true)
-            f_error_history.append(f_error)
+        if theta_column not in theta_iter.columns:
+            continue
+
+        theta = theta_iter[theta_column].values
+
+        f_est = theta[n_biomarkers:2*n_biomarkers]
+        a_est = theta[2*n_biomarkers:3*n_biomarkers]
+        b_est = theta[3*n_biomarkers:4*n_biomarkers]
+        scalar_K_est = theta[-1]  # or theta[4*n_biomarkers]
+
+        f_err = np.mean(np.abs(f_true - f_est)) / (np.mean(np.abs(f_true)) + 1e-8)
+        a_err = np.mean(np.abs(a_true - a_est)) / (np.mean(np.abs(a_true)) + 1e-8)
+        b_err = np.mean(np.abs(b_true - b_est)) / (np.mean(np.abs(b_true)) + 1e-8)
+        k_err = np.abs(scalar_K_true - scalar_K_est) / (np.abs(scalar_K_true) + 1e-8)
+
+        f_error_history.append(f_err)
+        a_error_history.append(a_err)
+        b_error_history.append(b_err)
+        scalar_K_error_history.append(k_err)
+        
     plt.figure(figsize=(10, 4))
-    #plt.plot(range(num_iterations), x0_error_history, label="x0 Error")
-    plt.plot(range(num_iterations), f_error_history, label="f Error")
+    plt.plot(f_error_history, label="f error")
+    plt.plot(a_error_history, label="a error")
+    plt.plot(b_error_history, label="b error")
+    plt.plot(scalar_K_error_history, label="scalar rrror")
     plt.xlabel("iteration")
     plt.ylabel("error")
     plt.legend()
