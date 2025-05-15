@@ -70,14 +70,12 @@ def plot_theta_fit_comparison(t: np.ndarray, t_span: np.ndarray, x_true: np.ndar
     plt.show()
 
 def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_iterations: int,
-                             f_true: np.ndarray, a_true: np.ndarray, b_true: np.ndarray,
-                             scalar_K_true: float) -> None:
+                             f_true: np.ndarray, s_true: np.ndarray, scalar_K_true: float) -> None:
     """
     Plots normalized error of each parameter group over EM iterations.
     """
     f_error_history = []
-    a_error_history = []
-    b_error_history = []
+    s_error_history = []
     scalar_K_error_history = []
 
     for iteration in range(num_iterations):
@@ -93,26 +91,24 @@ def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_it
         scalar_K_est = theta[-1]  # or theta[4*n_biomarkers]
 
         f_err = np.mean(np.abs(f_true - f_est)) / (np.mean(np.abs(f_true)) + 1e-8)
-        a_err = np.mean(np.abs(a_true - a_est)) / (np.mean(np.abs(a_true)) + 1e-8)
-        b_err = np.mean(np.abs(b_true - b_est)) / (np.mean(np.abs(b_true)) + 1e-8)
+        s_err = np.mean(np.abs(s_true - b_est)) / (np.mean(np.abs(s_true)) + 1e-8)
         k_err = np.abs(scalar_K_true - scalar_K_est) / (np.abs(scalar_K_true) + 1e-8)
 
         f_error_history.append(f_err)
-        a_error_history.append(a_err)
-        b_error_history.append(b_err)
+        s_error_history.append(s_err)
         scalar_K_error_history.append(k_err)
         
     plt.figure(figsize=(10, 4))
     plt.plot(f_error_history, label="f error")
-    plt.plot(a_error_history, label="a error")
-    plt.plot(b_error_history, label="b error")
+    plt.plot(s_error_history, label="s error")
     plt.plot(scalar_K_error_history, label="scalar rrror")
     plt.xlabel("iteration")
     plt.ylabel("error")
     plt.legend()
     plt.show()
 
-def plot_beta_overlay(df: pd.DataFrame, beta_iter: pd.DataFrame, theta_iter: pd.DataFrame, t_span: np.ndarray, n_biomarkers: int, x_init: np.ndarray, x_final: np.ndarray, iteration: int = -1, patient_range=(0, 10)) -> None:
+def plot_beta_overlay(df: pd.DataFrame, beta_iter: pd.DataFrame, theta_iter: pd.DataFrame, t_span: np.ndarray,
+                      n_biomarkers: int, x_init: np.ndarray, x_final: np.ndarray, iteration: int = -1, patient_range=(0, 5)) -> None:
     """
     Plots vertical lines for beta guesses vs true across patients with fitted curve.
     """
@@ -137,7 +133,7 @@ def plot_beta_error_history(beta_iter: pd.DataFrame, df: pd.DataFrame, num_itera
     Plots mean beta estimation error over EM iterations.
     """
     beta_error_history = []
-    for iteration in range(1, num_iterations + 1):
+    for iteration in range(num_iterations):
         beta_column = str(iteration)
         if beta_column in beta_iter.columns:
             beta_estimated = beta_iter[["patient_id", beta_column]].rename(columns={beta_column: "beta_estimated"})
@@ -145,7 +141,8 @@ def plot_beta_error_history(beta_iter: pd.DataFrame, df: pd.DataFrame, num_itera
             beta_diff["beta_error"] = np.abs(beta_diff["beta_true"] - beta_diff["beta_estimated"])
             beta_error_history.append(beta_diff["beta_error"].mean())
     plt.figure(figsize=(10, 5))
-    plt.plot(range(1, len(beta_error_history) + 1), beta_error_history)
+    plt.plot(range(len(beta_error_history)), beta_error_history)
+    plt.ylim([0, max(beta_error_history)])
     plt.xlabel("iteration")
     plt.ylabel("mean beta error")
     plt.show()
