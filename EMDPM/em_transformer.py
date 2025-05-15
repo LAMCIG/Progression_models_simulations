@@ -18,8 +18,8 @@ class EM(BaseEstimator, TransformerMixin):
                  t_max: float = 12, step: float = 0.01,
                  K: np.ndarray = None, use_jacobian: bool = False,
                  lamda: float = 0.01,
-                 scalar_K: float = 1.0, # scalar param on matrix #TODO: OMIT THIS GUY
                  lambda_cog: float = 0,
+                 rng: np.random.Generator = None
                  ):
 
         self.num_iterations = num_iterations
@@ -27,8 +27,7 @@ class EM(BaseEstimator, TransformerMixin):
         self.step = step
         self.K = K
         self.use_jacobian = use_jacobian
-        self.scalar_K = scalar_K
-        
+        self.rng = np.random.default_rng(75)
         # hyperparameters
         self.lamda = lamda # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
         self.lambda_cog = lambda_cog
@@ -52,12 +51,14 @@ class EM(BaseEstimator, TransformerMixin):
         """
         if self.K is None:
             raise ValueError("Connectivity matrix K must be provided at initialization.")
+        
+        rng = self.rng
 
         self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step))
         n_biomarkers = len([col for col in X.columns if "biomarker_" in col])
 
-        self.beta_iter_ = initialize_beta(X, beta_range=(0, self.t_max))
-        self.theta_iter_ = pd.DataFrame(columns=[f"iter_{i}" for i in range(self.num_iterations)])
+        self.beta_iter_ = initialize_beta(X, beta_range=(0, self.t_max), rng=rng)
+        self.theta_iter_ = pd.DataFrame(columns=[f"iter_{i}" for i in range(self.num_iterations + 1)])
         self.lse_array_ = []
 
         df_copy = X.copy()
@@ -66,28 +67,27 @@ class EM(BaseEstimator, TransformerMixin):
         jacobian_switched = False
         
         ## prepend computation 
-        rng = np.random.default_rng(75)
+
         initial_f = rng.uniform(0, 0.2, size=n_biomarkers)
-        initial_a = rng.uniform(0.1, 5, size=n_biomarkers)
-        initial_b = rng.uniform(-2, 2, size=n_biomarkers)
-        initial_scalar_K = rng.uniform(0.01, 10, size=1)
+        initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
+        initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
         
+        print("initial conditions:")
+        print(f"initial f: {initial_f}")
+        print(f"initial s: {initial_s}")
+        print(f"initial scalar: {initial_scalar_K}")
+        print(f"initial beta estimates (first 5 patients): {self.beta_iter_[["patient_id", "0"]].head(5)}")
+        print(f"initial beta mean: {self.beta_iter_["0"].mean():.4f}")
         x0_initial = np.zeros(n_biomarkers)
-        x_reconstructed_init = solve_system(x0_initial, initial_f, self.K_, self.t_span, scalar_K=initial_scalar_K.item())
+        x_reconstructed_init = solve_system(x0_initial, initial_f, self.K_, self.t_span, scalar_K=initial_scalar_K)
         
-        beta_estimates_init = {}
+        # Compute initial LSE using the initialized beta_iter_ (without re-estimating beta)
+        df_copy["beta"] = self.beta_iter_["0"]
+        df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
+
         initial_lse = 0
         for patient_id, df_patient in df_copy.groupby("patient_id"):
-            beta_i = estimate_beta_for_patient(
-                df_patient,
-                x_reconstructed_init,
-                self.t_span,
-                self.t_max,
-                use_jacobian=self.use_jacobian,
-                lambda_cog=self.lambda_cog
-            )
-            beta_estimates_init[patient_id] = beta_i
-
+            beta_i = df_patient["beta"].iloc[0]
             x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
             if self.use_jacobian:
                 res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
@@ -100,25 +100,11 @@ class EM(BaseEstimator, TransformerMixin):
                                 df_patient["cognitive_score"].values,
                                 self.lambda_cog)
             initial_lse += res
-
-        # store initial theta and LSE
-        initial_theta = np.concatenate([x0_initial, initial_f, initial_a, initial_b, initial_scalar_K])
+            
+        initial_theta = np.concatenate([x0_initial, initial_f, initial_s, [initial_scalar_K]])
         self.theta_iter_["iter_0"] = initial_theta
         self.lse_array_.append(initial_lse)
-
-        # store beta 0
-        if "0" in self.beta_iter_.columns:
-            self.beta_iter_.drop(columns=["0"], inplace=True)
-
-        beta_init_df = pd.DataFrame(list(beta_estimates_init.items()))
-        beta_init_df.columns = ["patient_id", "0"]
-        self.beta_iter_ = self.beta_iter_.merge(beta_init_df, on="patient_id", how="left")
-        #print("DEBUG beta_iter_ cols:", self.beta_iter_.columns.tolist())
-        # set up t_ij column
-        beta_colname = self.beta_iter_.columns[-1]  # Always fetch the las column
-        df_copy["beta"] = self.beta_iter_[beta_colname]
-        df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
-        
+            
         ## main loop
 
         iteration = 1
@@ -142,12 +128,11 @@ class EM(BaseEstimator, TransformerMixin):
                                       lamda = self.lamda,
                                       scalar_K_guess = initial_scalar_K,
                                       f_guess = initial_f,
-                                      a_guess = initial_a,
-                                      b_guess = initial_b,
+                                      s_guess = initial_s,
                                       rng = rng
                                       )
             
-            x0_fit, f_fit, a_fit, b_fit, scalar_K_fit = current_model_params
+            x0_fit, f_fit, s_fit, scalar_K_fit = current_model_params
             
             x_reconstructed = solve_system(x0_fit, f_fit, self.K_, self.t_span, scalar_K_fit)
             beta_estimates = {}
@@ -178,23 +163,13 @@ class EM(BaseEstimator, TransformerMixin):
                 self.use_jacobian = False
                 jacobian_switched = True
                 
-                # this prevents loop from crashing due to missing column
-                current_col = str(iteration)
-                previous_col = str(iteration - 1)
-
-                # if current_col not in self.beta_iter_.columns:
-                #     self.beta_iter_[current_col] = self.beta_iter_[previous_col]
-
-                # df_copy["beta"] = self.beta_iter_[current_col]
-                # df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
-
-                continue # skip storing values for current iteration. if True --> DONT UPDATE and RETRY
+                # continue # skip storing values for current iteration. if True --> DONT UPDATE and RETRY
             
             ## update accepted
             best_lse = min(best_lse, lse)
             
             # update theta and lse
-            current_theta = np.concatenate([x0_fit, f_fit, a_fit, b_fit, [scalar_K_fit]])
+            current_theta = np.concatenate([x0_fit, f_fit, s_fit, [scalar_K_fit]])
             self.theta_iter_[f"iter_{iteration}"] = current_theta
             self.lse_array_.append(lse)
             
@@ -202,9 +177,6 @@ class EM(BaseEstimator, TransformerMixin):
             beta_update_df = pd.DataFrame(list(beta_estimates.items()), columns=["patient_id", str(iteration)])
             self.beta_iter_ = self.beta_iter_.merge(beta_update_df, on="patient_id", how="left")
 
-            # recompute t_ij
-            # df_copy["beta"] = self.beta_iter_[str(iteration)]
-            # df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
                 
             iteration += 1
             pbar.update(1)
@@ -216,7 +188,7 @@ class EM(BaseEstimator, TransformerMixin):
             best_theta = self.theta_iter_[f"iter_{best_iter}"].values
 
         print("\nSUMMARY:")
-        print(f"best LSE at iteration {best_iter}: {self.lse_array_[best_iter]:.4f}")
+        print(f"best LSE at iteration {best_iter}: {self.lse_array_[best_iter]}")
         print("initial theta")
         print(initial_theta)
         print("best theta:")
@@ -225,23 +197,3 @@ class EM(BaseEstimator, TransformerMixin):
         print(final_theta)
 
         return self
-
-    # def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-    #     """
-    #     Append final estimated beta and t_ij to original DataFrame.
-
-    #     Parameters
-    #     ----------
-    #     X : pd.DataFrame
-    #         Original input DataFrame.
-
-    #     Returns
-    #     -------
-    #     pd.DataFrame
-    #         Updated DataFrame with final beta and t_ij columns.
-    #     """
-    #     df_copy = X.copy()
-    #     final_iter = str(self.num_iterations - 1)
-    #     df_copy["beta"] = self.beta_iter_[final_iter]
-    #     df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
-    #     return df_copy

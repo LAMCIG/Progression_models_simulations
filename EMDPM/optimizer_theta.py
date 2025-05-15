@@ -38,17 +38,16 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
 
     # unpack parameters
     f = params[:n_biomarkers]
-    a = params[n_biomarkers:2*n_biomarkers]
-    b = params[2*n_biomarkers:3*n_biomarkers]
+    s = params[n_biomarkers:2*n_biomarkers]
     scalar_K = params[-1]
 
     x0 = np.zeros(n_biomarkers)
     x = solve_system(x0, f, K, t_span, scalar_K)
-    x_affine = a[:, None] * x + b[:, None] # apply affine transform
+    x_scaled  = s[:, None] * x # scale for each biomarker
 
     x_pred = np.zeros_like(x_obs)
     for j in range(n_biomarkers):
-        x_pred[j] = np.interp(t_obs, t_span, x_affine[j])
+        x_pred[j] = np.interp(t_obs, t_span, x_scaled [j])
 
     residuals = x_obs.flatten() - x_pred.flatten()
     loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))  # Only penalize f for now
@@ -87,23 +86,24 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     
     # unpack parameters
     f = params[:n_biomarkers]
-    a = params[n_biomarkers:2*n_biomarkers]
-    b = params[2*n_biomarkers:3*n_biomarkers]
+    s = params[n_biomarkers:2*n_biomarkers]
     scalar_K = params[-1]
 
     x0 = np.zeros(n_biomarkers)
     x = solve_system(x0, f, K, t_span, scalar_K)
 
-    x_affine = a[:, None] * x + b[:, None] # apply affine transform
+    x_scaled  = s[:, None] * x
     
     x_pred = np.zeros_like(x_obs)
     for j in range(n_biomarkers):
-        x_pred[j] = np.interp(t_obs, t_span, x_affine[j])
+        x_pred[j] = np.interp(t_obs, t_span, x_scaled [j])
 
     residuals = x_obs - x_pred
     loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))
 
-    ## gradient computations
+    ### gradient computations
+    
+    ## wrt f
     cum_int = np.array([
         cumulative_simpson(1 - x[i], x=t_span, initial=0)
         for i in range(n_biomarkers)
@@ -113,15 +113,21 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     for i in range(n_biomarkers):
         cs_integ = CubicSpline(t_span, cum_int[i], extrapolate=True)
         df_obs[i] = cs_integ(t_obs)
+        
+    ## wrt s_k
+    Kx_plus_f = (K @ x) + f[:, None]  # n_biomarkers x len(t_span)
+    scalar_expr = (1 - x) * Kx_plus_f
 
-    grad_f = -2 * np.sum(residuals * (df_obs * a[:, None]), axis=1) + np.sign(f) * lamda
-    grad_a = -2 * np.sum(residuals, axis=1) # wrt to a
-    grad_b = -2 * np.sum(residuals, axis=1) # wrt to b
+    scalar_obs = np.zeros_like(x_obs)
+    for i in range(n_biomarkers):
+        interp_fn = CubicSpline(t_span, scalar_expr[i], extrapolate=True)
+        scalar_obs[i] = interp_fn(t_obs)
 
-    # Gradient wrt scalar_K: skipped for now
-    grad_scalar_K = np.array([0.0])
+    grad_f = -2 * np.sum(residuals * (df_obs * s[:, None]), axis=1) + np.sign(f) * lamda
+    grad_s = -2 * np.sum(residuals, axis=1) # wrt to a
+    grad_scalar_K = np.array([-2 * np.sum(residuals * scalar_obs)])
 
-    grad = np.concatenate([grad_f, grad_a, grad_b, grad_scalar_K])
+    grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
     return loss, grad
 
 def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
@@ -130,8 +136,7 @@ def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
               use_jacobian: bool = False, lamda: float = 1,
               scalar_K_guess: float = None,
               f_guess: np.ndarray = None,
-              a_guess: np.ndarray = None,
-              b_guess: np.ndarray = None,
+              s_guess: np.ndarray = None,
               rng: np.random.Generator = None) -> tuple:
     """
     Optimizes the ODE forcing term f (theta) for current EM iteration.
@@ -170,22 +175,19 @@ def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
     # inital guesses if None
     if f_guess is None:
         f_guess = rng.uniform(0, 0.2, size=n_biomarkers)
-    if a_guess is None:
-        a_guess = np.ones(n_biomarkers)
-    if b_guess is None:
-        b_guess = np.zeros(n_biomarkers)
+    if s_guess is None:
+        s_guess = np.ones(n_biomarkers)
     if scalar_K_guess is None:
         scalar_K_guess = 1.0
     
-    initial_params = np.concatenate([f_guess, a_guess, b_guess, scalar_K_guess])
+    initial_params = np.concatenate([f_guess, s_guess, [scalar_K_guess]])
     
     # bounds
     bounds_f = [(0, 0.2)] * n_biomarkers
-    bounds_a = [(0.1, 5.0)] * n_biomarkers  # prevent zero scaling
-    bounds_b = [(-2.0, 2.0)] * n_biomarkers  # assuming biomarker range ~[0, 1] for, #TODO: ask bg later
-    bounds_scalar_K = [(0.01, 5.0)]
+    bounds_s = [(0.1, 4.0)] * n_biomarkers  # supremum scaling
+    bounds_scalar_K = [(0.01, 5.0)] 
 
-    bounds = bounds_f + bounds_a + bounds_b + bounds_scalar_K
+    bounds = bounds_f + bounds_s + bounds_scalar_K
      
     if use_jacobian == True:
         loss_function = theta_loss_jac
@@ -203,8 +205,7 @@ def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
 
     fitted_params = result.x
     f_fit = fitted_params[:n_biomarkers]
-    a_fit = fitted_params[n_biomarkers:2*n_biomarkers]
-    b_fit = fitted_params[2*n_biomarkers:3*n_biomarkers]
+    s_fit = fitted_params[n_biomarkers:2*n_biomarkers]
     scalar_K_fit = fitted_params[-1]
     
-    return x0_fixed, f_fit, a_fit, b_fit, scalar_K_fit
+    return x0_fixed, f_fit, s_fit, scalar_K_fit
