@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import random
 from .model_generator import generate_logistic_model
+from scipy.stats import pearsonr
 
 def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_level: float = 0.0,
                             n_patients: int = 200, n_patient_obs: int = 3,
@@ -57,12 +58,16 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
         x_obs = x_true[:, np.searchsorted(t, t_obs)] + rng.normal(0, noise_level, (n_biomarkers, n_patient_obs))
         x_obs = x_obs.clip(0, 1)
 
-        cognitive_scores = t_obs + rng.normal(0, 1, size=n_patient_obs)
+        ## cog score
+        patient_scale = abs(rng.normal(1,1)) # individual patient scale
+        cognitive_scores = 10 * patient_scale + 10 * (t_obs - np.mean(t_obs)) / np.std(t_obs) + rng.normal(0, 15.0, size=n_patient_obs)
         beta_true_dict[patient_id] = first_visit
-
+        
+        
         for i in range(n_patient_obs):
             X.append([patient_id, t_cumsum[i], cognitive_scores[i], beta_true_dict[patient_id]] + list(x_obs[:, i]))
 
+    print(f"pearson R score vs. time: {pearsonr(t_obs, cognitive_scores)}")
     columns = ["patient_id", "dt", "cognitive_score", "beta_true"] + [f"biomarker_{i+1}" for i in range(n_biomarkers)]
     df = pd.DataFrame(X, columns=columns)
 
@@ -97,3 +102,17 @@ def initialize_beta(df: pd.DataFrame, beta_range: tuple = (0, 12), seed: int = 7
 
     beta_iter = pd.DataFrame({"patient_id": df["patient_id"], "0": beta_column})
     return beta_iter
+
+def initialize_alpha(df: pd.DataFrame, alpha_range: tuple = (0.5, 20.0), seed: int = 75, rng: np.random.Generator = None) -> pd.DataFrame:
+    if rng is None:
+        rng = np.random.default_rng(seed)
+
+    df = df.copy()
+    patient_ids = df["patient_id"].unique()
+    alpha_values = rng.uniform(alpha_range[0], alpha_range[1], size=len(patient_ids))
+
+    alpha_map = dict(zip(patient_ids, alpha_values))
+    alpha_column = df["patient_id"].map(alpha_map)
+
+    alpha_iter = pd.DataFrame({"patient_id": df["patient_id"], "0": alpha_column})
+    return alpha_iter

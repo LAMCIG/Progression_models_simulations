@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 from .utils import solve_system
-def beta_loss(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
+def beta_loss(params: np.ndarray, dt_obs: np.ndarray, x_obs: np.ndarray,
               x_reconstructed: np.ndarray, t_span: np.ndarray, 
               cog_scores: float, lambda_cog: float) -> tuple:
     """
@@ -26,6 +26,8 @@ def beta_loss(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     tuple
         Residual sum of squares and gradient with respect to beta_i.
     """
+    beta_i, alpha_i = params
+    
     t_adjusted = dt_obs + beta_i
 
     x_pred = np.array([
@@ -36,11 +38,11 @@ def beta_loss(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     residuals = x_obs - x_pred
     loss = np.sum(residuals ** 2)
     
-    cog_prior = lambda_cog * np.sum(t_adjusted - cog_scores)**2
+    cog_prior = lambda_cog * np.sum(t_adjusted - alpha_i * cog_scores)**2
 
     return loss + cog_prior
 
-def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
+def beta_loss_jac(params: np.ndarray, dt_obs: np.ndarray, x_obs: np.ndarray,
               x_reconstructed: np.ndarray, t_span: np.ndarray, cog_scores: np.ndarray, lambda_cog: float) -> tuple:
     """
     Computes the loss and gradient for optimizing a single patient's beta_i.
@@ -63,6 +65,8 @@ def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     tuple
         Residual sum of squares and gradient with respect to beta_i.
     """
+    beta_i, alpha_i = params
+    
     t_adjusted = dt_obs + beta_i
 
     x_pred = np.array([
@@ -71,7 +75,7 @@ def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     ])
 
     residuals = x_obs - x_pred
-    cog_prior = lambda_cog * np.sum(t_adjusted - cog_scores)**2
+    cog_prior = lambda_cog * np.sum(t_adjusted - alpha_i * cog_scores)**2
     loss = np.sum(residuals ** 2) + cog_prior
     
     df_dt = np.array([
@@ -84,14 +88,17 @@ def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     ])
 
     grad_reconstruction = 2 * np.sum((x_pred - x_obs) * df_dt_interp)
-    grad_cog = 2 * lambda_cog * np.sum(t_adjusted - cog_scores)
-    grad = grad_reconstruction + grad_cog
+    grad_cog = 2 * lambda_cog * np.sum(t_adjusted - alpha_i * cog_scores)
+    grad_beta = grad_reconstruction + grad_cog
+    
+    grad_alpha = -2 * lambda_cog * np.sum((t_adjusted - alpha_i * cog_scores) * cog_scores)
+    grad = np.array([grad_beta, grad_alpha])
     
     return loss, grad
 
 def estimate_beta_for_patient(df_patient: pd.DataFrame, x_reconstructed: np.ndarray,
                                t_span: np.ndarray, t_max: float, use_jacobian: bool = False,
-                               lambda_cog: float = 0) -> float:
+                               lambda_cog: float = 0, beta_guess: float = None, alpha_guess: float = None) -> float:
     """
     Estimates the optimal beta_i for a single patient.
 
@@ -115,7 +122,15 @@ def estimate_beta_for_patient(df_patient: pd.DataFrame, x_reconstructed: np.ndar
     dt_obs = df_patient["dt"].values
     x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
 
-    beta_guess = np.median(dt_obs)
+    if beta_guess is None:
+        beta_guess = np.median(dt_obs) 
+    
+    if alpha_guess is None:
+        alpha_guess = 1.0
+    
+    
+    initial_guess = np.array([beta_guess, alpha_guess])
+    
     cog_scores = df_patient["cognitive_score"].values # np.ndarray of cog scores
     
     if use_jacobian == True:
@@ -125,11 +140,11 @@ def estimate_beta_for_patient(df_patient: pd.DataFrame, x_reconstructed: np.ndar
 
     result = minimize(
         loss_function,
-        x0=beta_guess,
+        x0=initial_guess,
         args=(dt_obs, x_obs, x_reconstructed, t_span, cog_scores, lambda_cog),
         jac=use_jacobian,
-        bounds=[(0, t_max)],
-        method="L-BFGS-B"
+        bounds=[(0.01, t_max), (0.01, 30.0)],
+        method="L-BFGS-B",
     )
 
-    return result.x[0]
+    return result.x[0], result.x[1]

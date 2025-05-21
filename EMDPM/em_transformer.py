@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
-from .synthetic_data_generator import initialize_beta
+from .synthetic_data_generator import initialize_beta, initialize_alpha
 from .optimizer_theta import fit_theta
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .utils import solve_system
@@ -58,6 +58,8 @@ class EM(BaseEstimator, TransformerMixin):
         n_biomarkers = len([col for col in X.columns if "biomarker_" in col])
 
         self.beta_iter_ = initialize_beta(X, beta_range=(0, self.t_max), rng=rng)
+        self.alpha_iter_ = initialize_alpha(X, rng=rng)
+        
         self.theta_iter_ = pd.DataFrame(columns=[f"iter_{i}" for i in range(self.num_iterations + 1)])
         self.lse_array_ = []
 
@@ -88,17 +90,18 @@ class EM(BaseEstimator, TransformerMixin):
         initial_lse = 0
         for patient_id, df_patient in df_copy.groupby("patient_id"):
             beta_i = df_patient["beta"].iloc[0]
+            alpha_i = self.alpha_iter_["0"].loc[self.alpha_iter_["patient_id"] == patient_id].values[0]
+            cog_scaled = alpha_i * df_patient["cognitive_score"].values
             x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
+
+            params_i = np.array([beta_i, alpha_i])
+
             if self.use_jacobian:
-                res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
-                                    x_reconstructed_init, self.t_span,
-                                    df_patient["cognitive_score"].values,
-                                    self.lambda_cog)
+                res, _ = beta_loss_jac(params_i, df_patient["dt"].values, x_obs,
+                                    x_reconstructed_init, self.t_span, cog_scaled, self.lambda_cog)
             else:
-                res = beta_loss(beta_i, df_patient["dt"].values, x_obs,
-                                x_reconstructed_init, self.t_span,
-                                df_patient["cognitive_score"].values,
-                                self.lambda_cog)
+                res = beta_loss(params_i, df_patient["dt"].values, x_obs,
+                                x_reconstructed_init, self.t_span, cog_scaled, self.lambda_cog)
             initial_lse += res
             
         initial_theta = np.concatenate([x0_initial, initial_f, initial_s, [initial_scalar_K]])
@@ -136,27 +139,38 @@ class EM(BaseEstimator, TransformerMixin):
             
             x_reconstructed = solve_system(x0_fit, f_fit, self.K_, self.t_span, scalar_K_fit)
             beta_estimates = {}
+            alpha_estimates = {}
             lse = 0
             # best_lse = np.inf
+            
             
             # TODO: Attempt parallel beta computation
             ### beta comuputaiton
             for patient_id, df_patient in df_copy.groupby("patient_id"):
-                beta_i = estimate_beta_for_patient(df_patient,
+                
+                prev_beta = self.beta_iter_.loc[self.beta_iter_["patient_id"] == patient_id, prev_col].values[0]
+                prev_alpha = self.alpha_iter_.loc[self.alpha_iter_["patient_id"] == patient_id, prev_col].values[0]
+                
+                beta_i, alpha_i = estimate_beta_for_patient(df_patient,
                                                    x_reconstructed,
                                                    self.t_span,
                                                    self.t_max,
                                                    use_jacobian=self.use_jacobian,
-                                                   lambda_cog = self.lambda_cog)
+                                                   lambda_cog = self.lambda_cog,
+                                                   beta_guess = prev_beta,
+                                                   alpha_guess = prev_alpha)
                 beta_estimates[patient_id] = beta_i
-
+                alpha_estimates[patient_id] = alpha_i
+                params_i = np.array([beta_i, alpha_i])
+                
                 x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
                 
-                if self.use_jacobian == True:
-                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, df_patient["cognitive_score"].values, self.lambda_cog)
+                cog_scaled = alpha_i * df_patient["cognitive_score"].values
+                
+                if self.use_jacobian:
+                    res, _ = beta_loss_jac(params_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, cog_scaled, self.lambda_cog)
                 else:
-                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, df_patient["cognitive_score"].values, self.lambda_cog)
-                lse += res
+                    res = beta_loss(params_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, cog_scaled, self.lambda_cog)
 
             if self.use_jacobian and lse > best_lse and not jacobian_switched:
                 print(f"warning: jacobian toggled off due to increase in LSE at iteration {iteration}.")
@@ -176,6 +190,10 @@ class EM(BaseEstimator, TransformerMixin):
             # update beta
             beta_update_df = pd.DataFrame(list(beta_estimates.items()), columns=["patient_id", str(iteration)])
             self.beta_iter_ = self.beta_iter_.merge(beta_update_df, on="patient_id", how="left")
+            
+            # update alpha
+            alpha_update_df = pd.DataFrame(list(alpha_estimates.items()), columns=["patient_id", str(iteration)])
+            self.alpha_iter_ = self.alpha_iter_.merge(alpha_update_df, on="patient_id", how="left")
 
                 
             iteration += 1

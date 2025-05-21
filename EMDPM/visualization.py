@@ -128,11 +128,13 @@ def plot_beta_overlay(df: pd.DataFrame, beta_iter: pd.DataFrame, theta_iter: pd.
     plt.legend()
     plt.show()
 
-def plot_beta_error_history(beta_iter: pd.DataFrame, df: pd.DataFrame, num_iterations: int) -> None:
+def plot_beta_error_history(beta_iter: pd.DataFrame, alpha_iter: pd.DataFrame, df: pd.DataFrame, num_iterations: int) -> None:
     """
     Plots mean beta estimation error over EM iterations.
     """
     beta_error_history = []
+    alpha_mean_history = []
+    
     for iteration in range(num_iterations):
         beta_column = str(iteration)
         if beta_column in beta_iter.columns:
@@ -140,11 +142,17 @@ def plot_beta_error_history(beta_iter: pd.DataFrame, df: pd.DataFrame, num_itera
             beta_diff = df[["patient_id", "beta_true"]].merge(beta_estimated, on="patient_id")
             beta_diff["beta_error"] = np.abs(beta_diff["beta_true"] - beta_diff["beta_estimated"])
             beta_error_history.append(beta_diff["beta_error"].mean())
+            
+            alpha_mean = alpha_iter[beta_column].mean()
+            alpha_mean_history.append(alpha_mean)
+        
     plt.figure(figsize=(10, 5))
-    plt.plot(range(len(beta_error_history)), beta_error_history)
-    plt.ylim([0, max(beta_error_history)])
+    plt.plot(range(len(beta_error_history)), beta_error_history, label="Mean alpha")
+    plt.plot(range(len(alpha_mean_history)), alpha_mean_history, label="Mean alpha", color = 'red')
+    plt.ylim([0, max(max(beta_error_history), max(alpha_mean_history))])
+    plt.legend()
     plt.xlabel("iteration")
-    plt.ylabel("mean beta error")
+    plt.ylabel("mean beta optimization error")
     plt.show()
     
 def plot_lse(lse_array: list) -> None:
