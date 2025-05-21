@@ -120,10 +120,13 @@ def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_ma
     
     t_eval = np.arange(0, t_max, step)
     x0 = np.zeros(n_biomarkers)
-    f = rng.gamma(shape=2, scale=0.005, size=n_biomarkers)
+    
+    # sparse forcing
+    sparsity_fraction = 0.5  # 0.5 of elements are zeroed out
+    mask = rng.random(n_biomarkers) > sparsity_fraction
+    f = rng.gamma(shape=2, scale=0.01, size=n_biomarkers) * mask
 
-    x0[x0 < 0.01] = 0  # probably unnecessary but just to get rid of some small values
-    f[f < 0.01] = 0
+    x0[x0 < 0.02] = 0  # probably unnecessary but just to get rid of some small values
 
     # TODO: add to verbose feedback
     print(f"true x0: {x0}")
