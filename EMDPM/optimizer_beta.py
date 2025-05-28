@@ -91,7 +91,7 @@ def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     
     return loss, grad
 
-def estimate_beta_for_patient(df_patient: pd.DataFrame, x_reconstructed: np.ndarray,
+def estimate_beta_for_patient(beta_i: float, df_patient: pd.DataFrame, x_reconstructed: np.ndarray,
                                t_span: np.ndarray, t_max: float, use_jacobian: bool = False,
                                lambda_cog: float = 0, a: float = 1, b: float = 0) -> float:
     """
@@ -117,7 +117,8 @@ def estimate_beta_for_patient(df_patient: pd.DataFrame, x_reconstructed: np.ndar
     dt_obs = df_patient["dt"].values
     x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
 
-    beta_guess = np.median(dt_obs)
+    #beta_guess = np.median(dt_obs)
+    beta_guess = beta_i
     s_ij = df_patient["cognitive_score"].values # np.ndarray of cog scores
     
     if use_jacobian == True:

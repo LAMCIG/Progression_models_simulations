@@ -148,10 +148,13 @@ class EM(BaseEstimator, TransformerMixin):
             # TODO: Attempt parallel beta computation
             ### beta comuputaiton
             for patient_id, df_patient in df_copy.groupby("patient_id"):
-                beta_i = estimate_beta_for_patient(df_patient,
-                                                   x_reconstructed,
-                                                   self.t_span,
-                                                   self.t_max,
+                beta_i_prev = self.beta_iter_.loc[self.beta_iter_["patient_id"] == patient_id, prev_col].values[0]
+                
+                beta_i = estimate_beta_for_patient(beta_i= beta_i_prev,
+                                                   df_patient = df_patient,
+                                                   x_reconstructed = x_reconstructed,
+                                                   t_span= self.t_span,
+                                                   t_max = self.t_max,
                                                    use_jacobian=self.use_jacobian,
                                                    lambda_cog = self.lambda_cog,
                                                    a=cog_a, b=cog_b)
@@ -200,7 +203,8 @@ class EM(BaseEstimator, TransformerMixin):
                                                     self.t_span,
                                                     self.lambda_cog,
                                                     s_fit,
-                                                    use_jacobian=self.use_jacobian
+                                                    use_jacobian=self.use_jacobian,
+                                                    a_guess=cog_a, b_guess=cog_b
                                                     )
             
             self.cog_regression_history_.loc[iteration] = [cog_a, cog_b]

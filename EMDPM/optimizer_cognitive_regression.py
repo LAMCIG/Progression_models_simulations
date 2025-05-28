@@ -2,6 +2,9 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 
+# TODO: type hints
+# TODO: doc strings
+
 def cog_loss(params, t_ij, s_ij, x_obs, x_pred, lambda_cog):
     """
     Compute total loss for (a, b): data reconstruction + cognitive regression mismatch.
@@ -27,7 +30,7 @@ def cog_loss_jac(params, t_ij, s_ij, x_obs, x_pred, lambda_cog):
     return loss, grad
 
 def fit_optimizer_regression(df, beta_iter, iteration, x_reconstructed, t_span,
-                             lambda_cog, s_fit, use_jacobian=False):
+                             lambda_cog, s_fit, use_jacobian=False, a_guess = 1, b_guess = 0):
     """
     Optimize global cognitive regression parameters (a, b) given β_i and model predictions.
     """
@@ -48,9 +51,10 @@ def fit_optimizer_regression(df, beta_iter, iteration, x_reconstructed, t_span,
 
     result = minimize(
         cog_loss_jac if use_jacobian else cog_loss,
-        x0=np.array([1.0, 0.0]),
+        x0=np.array([a_guess, b_guess]),
         args=(t_ij, s_ij, x_obs, x_pred, lambda_cog),
         method="L-BFGS-B",
+        bounds=([0.01,6],[0.01,12]), 
         jac=use_jacobian
     )
 
