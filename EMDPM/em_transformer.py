@@ -4,6 +4,7 @@ from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
 from .synthetic_data_generator import initialize_beta
 from .optimizer_theta import fit_theta
+from .optimizer_cognitive_regression import fit_optimizer_regression
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .utils import solve_system
 
@@ -28,12 +29,17 @@ class EM(BaseEstimator, TransformerMixin):
         self.K = K
         self.use_jacobian = use_jacobian
         self.rng = np.random.default_rng(75)
+        
         # hyperparameters
         self.lamda = lamda # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
         self.lambda_cog = lambda_cog
         
         ## attributes for switching logic
         self.best_lse = np.inf
+        
+        ## optimized parameters
+        self.cog_a_ = cog_a
+        self.cog_b_ = cog_b
         
     def fit(self, X: pd.DataFrame, y=None):
         """
@@ -66,11 +72,14 @@ class EM(BaseEstimator, TransformerMixin):
         best_lse = np.inf # keep outside loop or else it resets
         jacobian_switched = False
         
-        ## prepend computation 
+        ## prepend computation && param intialization
 
         initial_f = rng.uniform(0, 0.2, size=n_biomarkers)
         initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
         initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
+        
+        cog_a = float(rng.uniform(1, 5))
+        cog_b = float(rng.uniform(0, 10))
         
         print("initial conditions:")
         print(f"initial f: {initial_f}")
@@ -89,15 +98,16 @@ class EM(BaseEstimator, TransformerMixin):
         for patient_id, df_patient in df_copy.groupby("patient_id"):
             beta_i = df_patient["beta"].iloc[0]
             x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
+            cog_score_adjusted = (df_patient["cognitive_score"].values - cog_b) / cog_a
             if self.use_jacobian:
                 res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
                                     x_reconstructed_init, self.t_span,
-                                    df_patient["cognitive_score"].values,
+                                    cog_score_adjusted,
                                     self.lambda_cog)
             else:
                 res = beta_loss(beta_i, df_patient["dt"].values, x_obs,
                                 x_reconstructed_init, self.t_span,
-                                df_patient["cognitive_score"].values,
+                                cog_score_adjusted,
                                 self.lambda_cog)
             initial_lse += res
             
@@ -151,11 +161,12 @@ class EM(BaseEstimator, TransformerMixin):
                 beta_estimates[patient_id] = beta_i
 
                 x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
+                cog_score_adjusted = (df_patient["cognitive_score"].values - cog_b) / cog_a
                 
                 if self.use_jacobian == True:
-                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, df_patient["cognitive_score"].values, self.lambda_cog)
+                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, cog_score_adjusted, self.lambda_cog)
                 else:
-                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, df_patient["cognitive_score"].values, self.lambda_cog)
+                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, cog_score_adjusted, self.lambda_cog)
                 lse += res
 
             if self.use_jacobian and lse > best_lse and not jacobian_switched:
@@ -164,6 +175,20 @@ class EM(BaseEstimator, TransformerMixin):
                 jacobian_switched = True
                 
                 # continue # skip storing values for current iteration. if True --> DONT UPDATE and RETRY
+            
+            ## update cog regression parameters
+            df_copy["beta"] = self.beta_iter_[str(iteration)]
+            df_copy["t_ij"] = df_copy["dt"] + df_copy["beta"]
+            
+            cog_a, cog_b = fit_optimizer_regression(df_copy,
+                                                    self.beta_iter_,
+                                                    iteration,
+                                                    x_reconstructed,
+                                                    self.t_span,
+                                                    self.lambda_cog,
+                                                    s_fit,
+                                                    use_jacobian=self.use_jacobian
+                                                    )
             
             ## update accepted
             best_lse = min(best_lse, lse)

@@ -1,0 +1,83 @@
+import numpy as np
+import pandas as pd
+from scipy.optimize import minimize
+
+def cog_loss(params, df, beta_iter, iteration, x_reconstructed, t_span, lambda_cog, s_fit):
+    """
+    Compute the total loss for cognitive regression: biomarker error + regression error.
+    """
+    a, b = params
+    df = df.copy()
+    df["beta"] = beta_iter[str(iteration)]
+    df["t_ij"] = df["dt"] + df["beta"]
+
+    t_ij = df["t_ij"].values
+    s_ij = df["cognitive_score"].values
+    biomarker_cols = [col for col in df.columns if "biomarker_" in col]
+    x_obs = df[biomarker_cols].values
+
+    n_biomarkers = x_reconstructed.shape[0]
+    x_pred = np.zeros_like(x_obs)
+
+    # Interpolate and apply supremum scaling
+    for j in range(n_biomarkers):
+        interpolated = np.interp(t_ij, t_span, x_reconstructed[j])
+        x_pred[:, j] = s_fit[j] * interpolated
+
+    residuals = np.sum((x_obs - x_pred) ** 2)
+    regression_error = np.sum((t_ij - (a * s_ij + b)) ** 2)
+
+    return residuals + lambda_cog * regression_error
+
+def cog_loss_jac(params, df, beta_iter, iteration, x_reconstructed, t_span, lambda_cog, s_fit):
+    """
+    Compute both the loss and gradient for cognitive regression.
+    """
+    a, b = params
+    df = df.copy()
+    df["beta"] = beta_iter[str(iteration)]
+    df["t_ij"] = df["dt"] + df["beta"]
+
+    t_ij = df["t_ij"].values
+    s_ij = df["cognitive_score"].values
+    biomarker_cols = [col for col in df.columns if "biomarker_" in col]
+    x_obs = df[biomarker_cols].values
+
+    n_biomarkers = x_reconstructed.shape[0]
+    x_pred = np.zeros_like(x_obs)
+
+    for j in range(n_biomarkers):
+        interpolated = np.interp(t_ij, t_span, x_reconstructed[j])
+        x_pred[:, j] = s_fit[j] * interpolated
+
+    residuals = x_obs - x_pred
+    data_error = np.sum(residuals ** 2)
+
+    t_pred_from_cog = a * s_ij + b
+    diff = t_ij - t_pred_from_cog
+    regression_error = np.sum(diff ** 2)
+
+    # Gradients (only wrt regression part)
+    grad_a = -2 * lambda_cog * np.sum(diff * s_ij)
+    grad_b = -2 * lambda_cog * np.sum(diff)
+
+    total_loss = data_error + lambda_cog * regression_error
+    grad = np.array([grad_a, grad_b])
+    return total_loss, grad
+
+def fit_optimizer_regression(df, beta_iter, iteration, x_reconstructed, t_span,
+                             lambda_cog, s_fit, use_jacobian=False):
+    """
+    Fit the global cognitive regression parameters (a, b) using least squares.
+    """
+    initial_guess = np.array([1.0, 0.0])
+
+    result = minimize(
+        cog_loss_jac if use_jacobian else cog_loss,
+        initial_guess,
+        args=(df, beta_iter, iteration, x_reconstructed, t_span, lambda_cog, s_fit),
+        method="L-BFGS-B",
+        jac=use_jacobian
+    )
+
+    return tuple(result.x)
