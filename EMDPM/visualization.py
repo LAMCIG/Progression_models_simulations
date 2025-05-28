@@ -156,3 +156,21 @@ def plot_lse(lse_array: list) -> None:
     plt.xlabel("iteration")
     plt.ylabel("LSE")
     plt.show()
+
+def plot_cog_regression_history(cog_history: list) -> None:
+    """
+    Plots history of cognitive regression parameters a and b over EM iterations.
+    """
+    cog_history = np.array(cog_history)
+    a_vals = cog_history[:, 0]
+    b_vals = cog_history[:, 1]
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(a_vals, color="red", label="a")
+    plt.plot(b_vals, color="blue", label="b")
+    plt.xlabel("iteration")
+    plt.ylabel("value")
+    plt.title("cognitive regression parameters")
+    plt.legend()
+    plt.show()
+
