@@ -37,10 +37,6 @@ class EM(BaseEstimator, TransformerMixin):
         ## attributes for switching logic
         self.best_lse = np.inf
         
-        ## optimized parameters
-        self.cog_a_ = cog_a
-        self.cog_b_ = cog_b
-        
     def fit(self, X: pd.DataFrame, y=None):
         """
         Run the EM loop to estimate theta (ODE params) and beta (patient shifts).
@@ -66,6 +62,7 @@ class EM(BaseEstimator, TransformerMixin):
         self.beta_iter_ = initialize_beta(X, beta_range=(0, self.t_max), rng=rng)
         self.theta_iter_ = pd.DataFrame(columns=[f"iter_{i}" for i in range(self.num_iterations + 1)])
         self.lse_array_ = []
+        self.cog_regression_history_ = pd.DataFrame(columns=["a", "b"])
 
         df_copy = X.copy()
         self.K_ = self.K
@@ -73,7 +70,6 @@ class EM(BaseEstimator, TransformerMixin):
         jacobian_switched = False
         
         ## prepend computation && param intialization
-
         initial_f = rng.uniform(0, 0.2, size=n_biomarkers)
         initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
         initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
@@ -98,22 +94,22 @@ class EM(BaseEstimator, TransformerMixin):
         for patient_id, df_patient in df_copy.groupby("patient_id"):
             beta_i = df_patient["beta"].iloc[0]
             x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
-            cog_score_adjusted = (df_patient["cognitive_score"].values - cog_b) / cog_a
+            s_ij = df_patient["cognitive_score"].values
+            
             if self.use_jacobian:
                 res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
-                                    x_reconstructed_init, self.t_span,
-                                    cog_score_adjusted,
-                                    self.lambda_cog)
+                                       x_reconstructed_init, self.t_span,
+                                       self.lambda_cog, s_ij, cog_a, cog_b)
             else:
                 res = beta_loss(beta_i, df_patient["dt"].values, x_obs,
                                 x_reconstructed_init, self.t_span,
-                                cog_score_adjusted,
-                                self.lambda_cog)
+                                self.lambda_cog, s_ij, cog_a, cog_b)
             initial_lse += res
             
         initial_theta = np.concatenate([x0_initial, initial_f, initial_s, [initial_scalar_K]])
         self.theta_iter_["iter_0"] = initial_theta
         self.lse_array_.append(initial_lse)
+        self.cog_regression_history_.loc[0] = [cog_a, cog_b]
             
         ## main loop
 
@@ -157,16 +153,21 @@ class EM(BaseEstimator, TransformerMixin):
                                                    self.t_span,
                                                    self.t_max,
                                                    use_jacobian=self.use_jacobian,
-                                                   lambda_cog = self.lambda_cog)
+                                                   lambda_cog = self.lambda_cog,
+                                                   a=cog_a, b=cog_b)
                 beta_estimates[patient_id] = beta_i
 
                 x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
                 cog_score_adjusted = (df_patient["cognitive_score"].values - cog_b) / cog_a
                 
                 if self.use_jacobian == True:
-                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, cog_score_adjusted, self.lambda_cog)
+                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
+                                           x_reconstructed, self.t_span,
+                                           self.lambda_cog, s_ij, cog_a, cog_b)
                 else:
-                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs, x_reconstructed, self.t_span, cog_score_adjusted, self.lambda_cog)
+                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs,
+                                    x_reconstructed, self.t_span,
+                                    self.lambda_cog, s_ij, cog_a, cog_b)
                 lse += res
 
             if self.use_jacobian and lse > best_lse and not jacobian_switched:
@@ -175,6 +176,18 @@ class EM(BaseEstimator, TransformerMixin):
                 jacobian_switched = True
                 
                 # continue # skip storing values for current iteration. if True --> DONT UPDATE and RETRY
+                
+            ## update accepted
+            best_lse = min(best_lse, lse)
+            
+            # update theta and lse
+            current_theta = np.concatenate([x0_fit, f_fit, s_fit, [scalar_K_fit]])
+            self.theta_iter_[f"iter_{iteration}"] = current_theta
+            self.lse_array_.append(lse)
+            
+            # update beta
+            beta_update_df = pd.DataFrame(list(beta_estimates.items()), columns=["patient_id", str(iteration)])
+            self.beta_iter_ = self.beta_iter_.merge(beta_update_df, on="patient_id", how="left")
             
             ## update cog regression parameters
             df_copy["beta"] = self.beta_iter_[str(iteration)]
@@ -190,18 +203,7 @@ class EM(BaseEstimator, TransformerMixin):
                                                     use_jacobian=self.use_jacobian
                                                     )
             
-            ## update accepted
-            best_lse = min(best_lse, lse)
-            
-            # update theta and lse
-            current_theta = np.concatenate([x0_fit, f_fit, s_fit, [scalar_K_fit]])
-            self.theta_iter_[f"iter_{iteration}"] = current_theta
-            self.lse_array_.append(lse)
-            
-            # update beta
-            beta_update_df = pd.DataFrame(list(beta_estimates.items()), columns=["patient_id", str(iteration)])
-            self.beta_iter_ = self.beta_iter_.merge(beta_update_df, on="patient_id", how="left")
-
+            self.cog_regression_history_.loc[iteration] = [cog_a, cog_b]
                 
             iteration += 1
             pbar.update(1)
