@@ -44,6 +44,13 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
 
     beta_true_dict = {}
     X = []
+    
+    # TODO: add a better way to pass in lower and upper bound for regression param initialization.
+    cog_a = float(rng.uniform(1,5,1))
+    cog_b = float(rng.uniform(0,10,1))
+    cog_noise =  float(rng.normal(0,1,1))
+    
+    print(f"a = {cog_a}, b = {cog_b}")
 
     for patient_id in range(n_patients):
         visit_interval = rng.gamma(shape=2, scale=0.5)
@@ -56,8 +63,8 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
 
         x_obs = x_true[:, np.searchsorted(t, t_obs)] + rng.normal(0, noise_level, (n_biomarkers, n_patient_obs))
         x_obs = x_obs.clip(0, 1)
-
-        cognitive_scores = t_obs + rng.normal(0, 1, size=n_patient_obs)
+        
+        cognitive_scores = cog_a*(t_obs + rng.normal(0, 1, size=n_patient_obs)) + cog_b + cog_noise
         beta_true_dict[patient_id] = first_visit
 
         for i in range(n_patient_obs):
