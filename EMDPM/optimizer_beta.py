@@ -76,6 +76,8 @@ def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
     residuals = x_obs - x_pred
     loss = np.sum(residuals ** 2) + cog_prior
     
+    # TODO: get rid of this just feed x_pred
+    
     df_dt = np.array([
         np.gradient(x_reconstructed[i], t_span)
         for i in range(x_obs.shape[0])
