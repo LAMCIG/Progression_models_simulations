@@ -161,7 +161,6 @@ class EM(BaseEstimator, TransformerMixin):
                 beta_estimates[patient_id] = beta_i
 
                 x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
-                cog_score_adjusted = (df_patient["cognitive_score"].values - cog_b) / cog_a
                 
                 if self.use_jacobian == True:
                     res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
