@@ -16,8 +16,9 @@ class EM(BaseEstimator, TransformerMixin):
 
     def __init__(self, 
                  num_iterations: int = 50,
-                 t_max: float = 12, step: float = 0.01,
-                 K: np.ndarray = None, use_jacobian: bool = False,
+                 t_max: float = 12,
+                 step: float = 0.01,
+                 use_jacobian: bool = False,
                  lamda: float = 0.01,
                  lambda_cog: float = 0,
                  rng: np.random.Generator = None
@@ -26,7 +27,6 @@ class EM(BaseEstimator, TransformerMixin):
         self.num_iterations = num_iterations
         self.t_max = t_max
         self.step = step
-        self.K = K
         self.use_jacobian = use_jacobian
         self.rng = np.random.default_rng(75)
         
@@ -37,18 +37,19 @@ class EM(BaseEstimator, TransformerMixin):
         ## attributes for switching logic
         self.best_lse = np.inf
         
-        
 
-        
-    def fit(self, X: pd.DataFrame, y=None):
+    def fit(self,
+            X: np.ndarray,
+            dt: np.ndarray,
+            ids: np.ndarray,
+            cog: np.ndarray,
+            K: np.ndarray,
+            y: np.ndarray = None):
         """
         Run the EM loop to estimate theta (ODE params) and beta (patient shifts).
 
         Parameters
         ----------
-        X : pd.DataFrame
-            Input dataframe containing patient observations.
-        y : Ignored
 
         Returns
         -------
