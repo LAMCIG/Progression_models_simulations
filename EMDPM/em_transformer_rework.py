@@ -2,11 +2,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
-from .synthetic_data_generator import initialize_beta
 from .optimizer_theta import fit_theta
-from .optimizer_cognitive_regression import fit_optimizer_regression
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
-from .utils import solve_system
+from .optimizer_cognitive_regression import fit_optimizer_regression
+from .utils import solve_system, initialize_beta
 
 class EM(BaseEstimator, TransformerMixin):
     """
@@ -24,20 +23,19 @@ class EM(BaseEstimator, TransformerMixin):
                  rng: np.random.Generator = None
                  ):
 
+        # [fitter settings]
         self.num_iterations = num_iterations
         self.t_max = t_max
         self.step = step
-        self.use_jacobian = use_jacobian
         self.rng = np.random.default_rng(75)
         
-        # hyperparameters
+        # [hyperparameters]
         self.lamda = lamda # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
         self.lambda_cog = lambda_cog
         
-        ## attributes for switching logic
-        self.best_lse = np.inf
+        ## [jacobian switching logic]
+        self.use_jacobian = use_jacobian
         
-
     def fit(self,
             X: np.ndarray,
             dt: np.ndarray,
@@ -55,40 +53,44 @@ class EM(BaseEstimator, TransformerMixin):
         -------
         self
         """
-        if self.K is None:
-            raise ValueError("Connectivity matrix K must be provided at initialization.")
-        
         rng = self.rng
-
-        self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step))
-        n_biomarkers = len([col for col in X.columns if "biomarker_" in col])
-
-        self.beta_iter_ = initialize_beta(X, beta_range=(0, self.t_max), rng=rng)
-        self.theta_iter_ = pd.DataFrame(columns=[f"iter_{i}" for i in range(self.num_iterations + 1)])
+        self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step)) # I dont know why this is a class variable might be for plotting
+        n_biomarkers = np.size(X,1) # rows = observations, columns = biomarkers
+        n_patients = len(np.unique(ids))
+        n_obs = np.size(X,0)
+        n_cog_features = np.size(cog, 1)
+        
         self.lse_array_ = []
-        self.cog_regression_history_ = pd.DataFrame(columns=["a", "b"])
-
-        df_copy = X.copy()
-        self.K_ = self.K
+        
+        ## initialize jacobian logic
         best_lse = np.inf # keep outside loop or else it resets
         jacobian_switched = False
         
-        ## prepend computation && param intialization
-        initial_f = rng.uniform(0, 0.2, size=n_biomarkers)
-        initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
+        ## initialize guesses
+        initial_x0 = np.zeros(n_biomarkers)
+        initial_f = rng.uniform(0, 0.2, size=n_biomarkers) # these is fine
+        initial_s = rng.uniform(0.1, 3, size=n_biomarkers) 
         initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
+        initial_theta = np.concatenate([initial_f, initial_s, initial_scalar_K])
+        initial_beta = initialize_beta(ids=ids, beta_range=(0, self.t_max), rng=rng)
+        initial_cog_a = rng.uniform(1, 5, np.size(cog, 1)) # initialize a weight for each type of cog test
+        initial_cog_b = float(rng.uniform(0, 10)) # bias term
         
-        cog_a = float(rng.uniform(1, 5))
-        cog_b = float(rng.uniform(0, 10))
+        ## initialize histories
+        theta_history = np.zeros((np.size(initial_theta), self.num_iterations + 1)) # theta_params by n_iterations
+        beta_history = np.zeros((n_patients, self.num_iterations + 1))
+        lse_history = np.zeros((n_patients, self.num_iterations + 1))
+        cog_regression_history = np.zeros((n_cog_features + 1, self.num_iterations + 1))  # + 1 is for intercept
         
+        ## move these later towards the end for a summary:
         print("initial conditions:")
         print(f"initial f: {initial_f}")
         print(f"initial s: {initial_s}")
-        print(f"initial scalar: {initial_scalar_K}")
-        print(f"initial beta estimates (first 5 patients): {self.beta_iter_[["patient_id", "0"]].head(5)}")
-        print(f"initial beta mean: {self.beta_iter_["0"].mean():.4f}")
-        x0_initial = np.zeros(n_biomarkers)
-        x_reconstructed_init = solve_system(x0_initial, initial_f, self.K_, self.t_span, scalar_K=initial_scalar_K)
+        print(f"initial scalar K: {initial_scalar_K}")
+        
+        ### PREPEND COMPUTATIONS
+        
+        x_init = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
         
         # Compute initial LSE using the initialized beta_iter_ (without re-estimating beta)
         df_copy["beta"] = self.beta_iter_["0"]
@@ -110,7 +112,6 @@ class EM(BaseEstimator, TransformerMixin):
                                 self.lambda_cog, s_ij, cog_a, cog_b)
             initial_lse += res
             
-        initial_theta = np.concatenate([x0_initial, initial_f, initial_s, [initial_scalar_K]])
         self.theta_iter_["iter_0"] = initial_theta
         self.lse_array_.append(initial_lse)
         self.cog_regression_history_.loc[0] = [cog_a, cog_b]
