@@ -57,8 +57,9 @@ class EM(BaseEstimator, TransformerMixin):
         self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step)) # I dont know why this is a class variable might be for plotting
         n_biomarkers = np.size(X,1) # rows = observations, columns = biomarkers
         n_patients = len(np.unique(ids))
-        n_obs = np.size(X,0)
-        n_cog_features = np.size(cog, 1)
+        n_obs = X.shape[0]
+        cog = np.atleast_2d(cog) # cast cog into 2D array size tuple needs two elements for counting cols
+        n_cog_features = cog.shape[0]
         
         self.lse_array_ = []
         
@@ -67,56 +68,62 @@ class EM(BaseEstimator, TransformerMixin):
         jacobian_switched = False
         
         ## initialize guesses
+        # theta
         initial_x0 = np.zeros(n_biomarkers)
-        initial_f = rng.uniform(0, 0.2, size=n_biomarkers) # these is fine
-        initial_s = rng.uniform(0.1, 3, size=n_biomarkers) 
+        initial_f = rng.uniform(0, 0.2, size=n_biomarkers)
+        initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
         initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
-        initial_theta = np.concatenate([initial_f, initial_s, initial_scalar_K])
+        initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
+        
+        # beta
         initial_beta = initialize_beta(ids=ids, beta_range=(0, self.t_max), rng=rng)
-        initial_cog_a = rng.uniform(1, 5, np.size(cog, 1)) # initialize a weight for each type of cog test
+        
+        # cog regression params
+        initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = float(rng.uniform(0, 10)) # bias term
         
+        ## move these later towards the end for a summary:
+        print("initial conditions:")
+        print(f"n_patients: {n_patients}, n_obs: {n_obs}")
+        print(f"initial f: {initial_f}")
+        print(f"initial s: {initial_s}")
+        print(f"initial scalar K: {initial_scalar_K}")
+        print(f"initial beta: {initial_beta.shape}")
+        
         ## initialize histories
-        theta_history = np.zeros((np.size(initial_theta), self.num_iterations + 1)) # theta_params by n_iterations
+        theta_history = np.zeros((np.size(initial_theta), self.num_iterations + 1)) # extra column added for initial guesses
         beta_history = np.zeros((n_patients, self.num_iterations + 1))
         lse_history = np.zeros((n_patients, self.num_iterations + 1))
         cog_regression_history = np.zeros((n_cog_features + 1, self.num_iterations + 1))  # + 1 is for intercept
         
-        ## move these later towards the end for a summary:
-        print("initial conditions:")
-        print(f"initial f: {initial_f}")
-        print(f"initial s: {initial_s}")
-        print(f"initial scalar K: {initial_scalar_K}")
+        ## Append initial values to histories
+        theta_history[:, 0] = initial_theta
+        beta_history[:, 0] = initial_beta
+        cog_regression_history[:, 0] = np.concatenate([initial_cog_a, [initial_cog_b]])
         
-        ### PREPEND COMPUTATIONS
-        
-        x_init = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
-        
-        # Compute initial LSE using the initialized beta_iter_ (without re-estimating beta)
-        df_copy["beta"] = self.beta_iter_["0"]
-        df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
+        ## Compute Initial LSE
+        X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
+        print(X_pred.shape)
 
-        initial_lse = 0
-        for patient_id, df_patient in df_copy.groupby("patient_id"):
-            beta_i = df_patient["beta"].iloc[0]
-            x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
-            s_ij = df_patient["cognitive_score"].values
+        initial_lse = 0.0
+        
+        for idx, pid in enumerate(np.unique(ids)): # each iter will be like (idx, pid)
+            mask = (ids == pid)
+            print(np.size(mask), X.shape, dt.shape, cog.shape)
+            X_obs_i, dt_i, cog_i = X[mask], dt[mask], cog.T[mask]
+            beta_i = initial_beta[idx]
             
             if self.use_jacobian:
-                res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
-                                       x_reconstructed_init, self.t_span,
-                                       self.lambda_cog, s_ij, cog_a, cog_b)
+                res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K)
             else:
-                res = beta_loss(beta_i, df_patient["dt"].values, x_obs,
-                                x_reconstructed_init, self.t_span,
-                                self.lambda_cog, s_ij, cog_a, cog_b)
+                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b)
             initial_lse += res
             
-        self.theta_iter_["iter_0"] = initial_theta
-        self.lse_array_.append(initial_lse)
-        self.cog_regression_history_.loc[0] = [cog_a, cog_b]
-            
-        ## main loop
+        print(f"LSE Prepend complete! LSE: {initial_lse}")
+        lse_history[0] = initial_lse
+        
+        
+        ## MAIN LOOP
 
         iteration = 1
         pbar = tqdm(total=self.num_iterations)
