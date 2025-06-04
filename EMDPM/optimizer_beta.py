@@ -2,95 +2,87 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 from .utils import solve_system
-def beta_loss(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
-              x_reconstructed: np.ndarray, t_span: np.ndarray, lambda_cog: float,
-              s_ij: np.ndarray, a: float, b: float) -> tuple:
+def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
+              X_pred: np.ndarray, t_span: np.ndarray,
+              cog_i: np.ndarray, cog_a: np.ndarray, cog_b: float,
+              lambda_cog: float = 0.0) -> float:
+    
     """
     Computes the loss and gradient for optimizing a single patient's beta_i.
 
     Parameters
     ----------
-    beta_i : float
-        Current estimate of the patient-specific time shift.
-    dt_obs : np.ndarray
-        Relative time since first visit for each observation.
-    x_obs : np.ndarray
-        Observed biomarker values (n_biomarkers x n_visits).
-    x_reconstructed : np.ndarray
-        Model-predicted biomarker trajectories from solve_system.
-    t_span : np.ndarray
-        Time span used to simulate trajectories.
-
+    TODO: DOCSTRINGS NEEDED ASAP
     Returns
     -------
     tuple
         Residual sum of squares and gradient with respect to beta_i.
     """
-    t_adjusted = dt_obs + beta_i
-    cog_score_ij = a * s_ij + b
-    cog_prior = lambda_cog * np.sum((t_adjusted - cog_score_ij) ** 2)
-
-    x_pred = np.array([
-        np.interp(t_adjusted, t_span, x_reconstructed[i])
-        for i in range(x_obs.shape[0])
+    t_pred_i = dt_i + beta_i
+    X_interp_i = np.array([
+        np.interp(t_pred_i, t_span, X_pred[i])
+        for i in range(X_pred.shape[0])
     ])
-
-    residuals = x_obs - x_pred
+    
+    X_obs_i_T = X_obs_i.T  # now (n_biomarkers, n_visits_i)
+    residuals = X_obs_i_T - X_interp_i
     loss = np.sum(residuals ** 2)
 
-    return loss + cog_prior
+    cog_pred = cog_i @ cog_a + cog_b  # shape (n_visits_i,)
+    cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
 
-def beta_loss_jac(beta_i: float, dt_obs: np.ndarray, x_obs: np.ndarray,
-              x_reconstructed: np.ndarray, t_span: np.ndarray, lambda_cog: float,
-              s_ij: np.ndarray, a: float, b: float) -> tuple:
+    return loss + cog_prior
+    
+    
+def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
+                  X_pred: np.ndarray, t_span: np.ndarray,
+                  cog_i: np.ndarray, cog_a: np.ndarray, cog_b: float,
+                  theta: np.ndarray, K: np.ndarray, lambda_cog: float = 0.0) -> float:
     """
     Computes the loss and gradient for optimizing a single patient's beta_i.
 
     Parameters
     ----------
-    beta_i : float
-        Current estimate of the patient-specific time shift.
-    dt_obs : np.ndarray
-        Relative time since first visit for each observation.
-    x_obs : np.ndarray
-        Observed biomarker values (n_biomarkers x n_visits).
-    x_reconstructed : np.ndarray
-        Model-predicted biomarker trajectories from solve_system.
-    t_span : np.ndarray
-        Time span used to simulate trajectories.
-
     Returns
     -------
     tuple
         Residual sum of squares and gradient with respect to beta_i.
     """
-    t_adjusted = dt_obs + beta_i
-    cog_score_ij = a * s_ij + b
-    cog_prior = lambda_cog * np.sum((t_adjusted - cog_score_ij) ** 2)
+    
+    n_biomarkers = X_obs_i.shape[1]  # X_pred.shape[0]
+    f = theta[:n_biomarkers]
+    s = theta[n_biomarkers:2*n_biomarkers]
+    scalar_K = theta[-1]
+    
+    t_pred_i = dt_i + beta_i 
 
-    x_pred = np.array([
-        np.interp(t_adjusted, t_span, x_reconstructed[i])
-        for i in range(x_obs.shape[0])
+    X_interp_i = np.array([
+        np.interp(t_pred_i, t_span, X_pred[i])
+        for i in range(X_pred.shape[0])
     ])
 
-    residuals = x_obs - x_pred
+    X_obs_i_T = X_obs_i.T  # (n_biomarkers, n_visits_i)
+    residuals = X_obs_i_T - X_interp_i
+    
+    #print("residual terms: ", X_obs_i_T.shape, X_interp_i.shape)
+
+    # dx/dt = (I - diag(x)) @ (scalar_K K x + f)
+    I = np.eye(X_pred.shape[0])
+    #print("Eye terms: ", I.shape, X_pred.shape, np.diag(X_interp_i).shape)
+    
+    dxdt_interp_i = np.zeros_like(X_interp_i)
+    for j in range(X_interp_i.shape[1]):
+        x_t = X_interp_i[:, j]
+        dxdt_interp_i[:, j] = (np.eye(n_biomarkers) - np.diag(x_t)) @ (scalar_K * K @ x_t + f)
+        grad_reconstruction = -2 * np.sum(residuals * dxdt_interp_i)
+
+    # print("cog params:", cog_i.shape, cog_a.shape, np.size(cog_b))
+    cog_pred = cog_i @ cog_a + cog_b
+    cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
+    grad_cog = 2 * lambda_cog * np.sum(t_pred_i - cog_pred)
+
     loss = np.sum(residuals ** 2) + cog_prior
-    
-    # TODO: get rid of this just feed x_pred
-    
-    df_dt = np.array([
-        np.gradient(x_reconstructed[i], t_span)
-        for i in range(x_obs.shape[0])
-    ])
-    df_dt_interp = np.array([
-        np.interp(t_adjusted, t_span, df_dt[i])
-        for i in range(x_obs.shape[0])
-    ])
-
-    grad_reconstruction = 2 * np.sum((x_pred - x_obs) * df_dt_interp)
-    grad_cog = 2 * lambda_cog * np.sum(t_adjusted - cog_score_ij)
     grad = grad_reconstruction + grad_cog
-    
     return loss, grad
 
 def estimate_beta_for_patient(beta_i: float, df_patient: pd.DataFrame, x_reconstructed: np.ndarray,
