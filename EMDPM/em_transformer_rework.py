@@ -4,7 +4,7 @@ from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
 from .optimizer_theta import fit_theta
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
-from .optimizer_cognitive_regression import fit_optimizer_regression
+from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
 from .utils import solve_system, initialize_beta
 
 class EM(BaseEstimator, TransformerMixin):
@@ -61,8 +61,6 @@ class EM(BaseEstimator, TransformerMixin):
         cog = np.atleast_2d(cog) # cast cog into 2D array size tuple needs two elements for counting cols
         n_cog_features = cog.shape[0]
         
-        self.lse_array_ = []
-        
         ## initialize jacobian logic
         best_lse = np.inf # keep outside loop or else it resets
         jacobian_switched = False
@@ -79,8 +77,11 @@ class EM(BaseEstimator, TransformerMixin):
         initial_beta = initialize_beta(ids=ids, beta_range=(0, self.t_max), rng=rng)
         
         # cog regression params
-        initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
-        initial_cog_b = float(rng.uniform(0, 10)) # bias term
+        initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
+        initial_cog_b = 0 # bias term
+        
+        #initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
+        #initial_cog_b = float(rng.uniform(0, 10)) # bias term
         
         ## move these later towards the end for a summary:
         print("initial conditions:")
@@ -91,7 +92,7 @@ class EM(BaseEstimator, TransformerMixin):
         print(f"initial beta: {initial_beta.shape}")
         
         ## initialize histories
-        theta_history = np.zeros((np.size(initial_theta), self.num_iterations + 1)) # extra column added for initial guesses
+        theta_history = np.zeros((initial_theta.shape[0], self.num_iterations + 1)) # extra column added for initial guesses
         beta_history = np.zeros((n_patients, self.num_iterations + 1))
         lse_history = np.zeros((n_patients, self.num_iterations + 1))
         cog_regression_history = np.zeros((n_cog_features + 1, self.num_iterations + 1))  # + 1 is for intercept
@@ -103,89 +104,81 @@ class EM(BaseEstimator, TransformerMixin):
         
         ## Compute Initial LSE
         X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
-        print(X_pred.shape)
+        #print(X_pred.shape)
 
         initial_lse = 0.0
         
         for idx, pid in enumerate(np.unique(ids)): # each iter will be like (idx, pid)
             mask = (ids == pid)
-            print(np.size(mask), X.shape, dt.shape, cog.shape)
+            # print(np.size(mask), X.shape, dt.shape, cog.shape)
             X_obs_i, dt_i, cog_i = X[mask], dt[mask], cog.T[mask]
             beta_i = initial_beta[idx]
             
             if self.use_jacobian:
-                res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K)
+                res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K, self.lambda_cog)
             else:
-                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b)
+                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, self.lambda_cog)
             initial_lse += res
             
-        print(f"LSE Prepend complete! LSE: {initial_lse}")
+        #print(f"LSE Prepend complete! LSE: {initial_lse}")
         lse_history[0] = initial_lse
         
+        ## initialize current vars for main loop
+        current_beta = initial_beta
+        current_f = initial_f
+        current_s = initial_s
+        current_scalar_K = initial_scalar_K
+        current_cog_a = initial_cog_a
+        current_cog_b = initial_cog_b
         
         ## MAIN LOOP
-
-        iteration = 1
+        loop_iter = 0
+        
         pbar = tqdm(total=self.num_iterations)
-        while iteration < self.num_iterations:
-            prev_col = str(iteration - 1)
-            
-            if prev_col not in self.beta_iter_.columns:
-                raise KeyError(f"Missing expected column '{prev_col}' in beta_iter_ at iteration {iteration}.")
-            
-            df_copy["beta"] = self.beta_iter_[prev_col]
-            df_copy["t_ij"] = df_copy["beta"] + df_copy["dt"]
-
-            #print(f"[DEBUG] Available beta columns: {self.beta_iter_.columns.tolist()}")
-            current_model_params = fit_theta(df_copy, 
-                                      self.beta_iter_,
-                                      iteration - 1, # need to use beta from last completed iter therefore "current - 1"
-                                      self.K_,
-                                      self.t_span,
-                                      use_jacobian=self.use_jacobian,
-                                      lamda = self.lamda,
-                                      scalar_K_guess = initial_scalar_K,
-                                      f_guess = initial_f,
-                                      s_guess = initial_s,
-                                      rng = rng
+        while loop_iter < self.num_iterations:
+            hist_idx = loop_iter + 1
+            current_theta = fit_theta(X_obs=X, dt_obs=dt, ids=ids, K=K,
+                                             t_span=self.t_span, step=self.step,
+                                             use_jacobian=self.use_jacobian, lamda=self.lamda,
+                                             beta_pred=current_beta, f_guess=current_f, s_guess=initial_s,
+                                             scalar_K_guess=current_scalar_K, rng=rng
                                       )
             
-            x0_fit, f_fit, s_fit, scalar_K_fit = current_model_params
-            
-            x_reconstructed = solve_system(x0_fit, f_fit, self.K_, self.t_span, scalar_K_fit)
-            beta_estimates = {}
-            lse = 0
-            # best_lse = np.inf
+            current_x0, current_f, current_s, current_scalar_K = current_theta
+            X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
+            # print("Breakpoint 7: ", X_pred.shape, X_pred.dtype)
+            theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
+            lse = 0.0
             
             # TODO: Attempt parallel beta computation
             ### beta comuputaiton
-            for patient_id, df_patient in df_copy.groupby("patient_id"):
-                beta_i_prev = self.beta_iter_.loc[self.beta_iter_["patient_id"] == patient_id, prev_col].values[0]
+            for idx, patient_id in enumerate(np.unique(ids)):
+                mask = (ids == patient_id)
+                x_obs_i = X[mask]  # (n_obs_i, n_biomarkers)
+                dt_i = dt[mask]    # (n_obs_i,)
+                cog_i = cog.T[mask]  # (n_obs_i, n_cog_features)
+                beta_i = current_beta[idx]
+            
+                #print("breakpoint 6: ", x_obs_i.shape, x_obs_i.dtype,dt_i.shape, dt_i.dtype, cog_i.shape, cog_i.dtype, beta_i)  
+                #print("breakpoint 8: ", current_cog_a.shape)
+            
+                beta_i = estimate_beta_for_patient(beta_i=beta_i, X_obs_i=x_obs_i, dt_i=dt_i,
+                                                   X_pred=X_pred, t_span=self.t_span,
+                                                   cog_i = cog_i, cog_a = current_cog_a, cog_b = current_cog_b,
+                                                   theta = current_theta, K=K, lambda_cog = self.lambda_cog,
+                                                   use_jacobian = self.use_jacobian, t_max = self.t_max
+                                                   )
                 
-                beta_i = estimate_beta_for_patient(beta_i= beta_i_prev,
-                                                   df_patient = df_patient,
-                                                   x_reconstructed = x_reconstructed,
-                                                   t_span= self.t_span,
-                                                   t_max = self.t_max,
-                                                   use_jacobian=self.use_jacobian,
-                                                   lambda_cog = self.lambda_cog,
-                                                   a=cog_a, b=cog_b)
-                beta_estimates[patient_id] = beta_i
-
-                x_obs = df_patient[[col for col in df_patient.columns if "biomarker_" in col]].values.T
+                beta_history[idx, hist_idx] = beta_i
                 
-                if self.use_jacobian == True:
-                    res, _ = beta_loss_jac(beta_i, df_patient["dt"].values, x_obs,
-                                           x_reconstructed, self.t_span,
-                                           self.lambda_cog, s_ij, cog_a, cog_b)
+                if self.use_jacobian:
+                    res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, initial_theta, K, self.lambda_cog)
                 else:
-                    res = beta_loss(beta_i, df_patient["dt"].values, x_obs,
-                                    x_reconstructed, self.t_span,
-                                    self.lambda_cog, s_ij, cog_a, cog_b)
+                    res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, self.lambda_cog)
                 lse += res
 
             if self.use_jacobian and lse > best_lse and not jacobian_switched:
-                print(f"warning: jacobian toggled off due to increase in LSE at iteration {iteration}.")
+                print(f"warning: jacobian toggled off due to increase in LSE at iteration {loop_iter}.")
                 self.use_jacobian = False
                 jacobian_switched = True
                 
@@ -193,49 +186,24 @@ class EM(BaseEstimator, TransformerMixin):
                 
             ## update accepted
             best_lse = min(best_lse, lse)
+            # TODO: Get idk of best lse
+            lse_history[hist_idx] = lse
             
-            # update theta and lse
-            current_theta = np.concatenate([x0_fit, f_fit, s_fit, [scalar_K_fit]])
-            self.theta_iter_[f"iter_{iteration}"] = current_theta
-            self.lse_array_.append(lse)
+            #current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta)
+            #cog_regression_history[:, hist_idx] = np.concatenate([current_cog_a, [current_cog_b]])
             
-            # update beta
-            beta_update_df = pd.DataFrame(list(beta_estimates.items()), columns=["patient_id", str(iteration)])
-            self.beta_iter_ = self.beta_iter_.merge(beta_update_df, on="patient_id", how="left")
-            
-            ## update cog regression parameters
-            df_copy["beta"] = self.beta_iter_[str(iteration)]
-            df_copy["t_ij"] = df_copy["dt"] + df_copy["beta"]
-            
-            cog_a, cog_b = fit_optimizer_regression(df_copy,
-                                                    self.beta_iter_,
-                                                    iteration,
-                                                    x_reconstructed,
-                                                    self.t_span,
-                                                    self.lambda_cog,
-                                                    s_fit,
-                                                    use_jacobian=self.use_jacobian,
-                                                    a_guess=cog_a, b_guess=cog_b
-                                                    )
-            
-            self.cog_regression_history_.loc[iteration] = [cog_a, cog_b]
-                
-            iteration += 1
+            loop_iter += 1
             pbar.update(1)
             
-            # Summary
-            best_iter = np.argmin(self.lse_array_)
-            initial_theta = self.theta_iter_["iter_0"].values
-            final_theta = self.theta_iter_[f"iter_{self.num_iterations - 1}"].values
-            best_theta = self.theta_iter_[f"iter_{best_iter}"].values
+        final_theta = theta_history[:,-1]
 
         print("\nSUMMARY:")
-        print(f"best LSE at iteration {best_iter}: {self.lse_array_[best_iter]}")
-        print("initial theta")
-        print(initial_theta)
-        print("best theta:")
-        print(best_theta)
-        print("final theta:")
-        print(final_theta)
+        print("initial theta: ", initial_theta)
+        print("final theta: ", final_theta)
+        
+        self.theta_history = theta_history
+        self.beta_history = beta_history
+        self.lse_history = lse_history
+        self.cog_regression_history = cog_regression_history
 
         return self
