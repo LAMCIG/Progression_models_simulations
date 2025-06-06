@@ -34,23 +34,23 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     tuple
         Loss scalar and gradient vector.
     """
-    n_biomarkers = x_obs.shape[0]
+    n_biomarkers = x_obs.shape[1]
 
-    # unpack parameters
     f = params[:n_biomarkers]
     s = params[n_biomarkers:2*n_biomarkers]
     scalar_K = params[-1]
-
     x0 = np.zeros(n_biomarkers)
+    # print("Breakpoint 1 Theta: ", n_biomarkers, x0.shape, f.shape, K.shape, t_span.shape)
     x = solve_system(x0, f, K, t_span, scalar_K)
-    x_scaled  = s[:, None] * x # scale for each biomarker
-
-    x_pred = np.zeros_like(x_obs)
+    x_scaled  = s[:, None] * x
+    
+    x_pred = np.zeros_like(x_obs) # (n_obs, n_biomarkers)
+    # print("Breakpoint 2 Theta: ", x_pred.shape, t_obs.shape, t_span.shape, x_scaled.shape)
     for j in range(n_biomarkers):
-        x_pred[j] = np.interp(t_obs, t_span, x_scaled [j])
+        x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j])
 
-    residuals = x_obs.flatten() - x_pred.flatten()
-    loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))  # Only penalize f for now
+    residuals = x_obs - x_pred
+    loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))
 
     return loss
 
@@ -82,21 +82,22 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     tuple
         Loss scalar and gradient vector.
     """
-    n_biomarkers = x_obs.shape[0]
+    n_biomarkers = x_obs.shape[1]
     
     # unpack parameters
     f = params[:n_biomarkers]
     s = params[n_biomarkers:2*n_biomarkers]
     scalar_K = params[-1]
-
     x0 = np.zeros(n_biomarkers)
+    # print("Breakpoint 1 Theta: ", n_biomarkers, x0.shape, f.shape, K.shape, t_span.shape)
     x = solve_system(x0, f, K, t_span, scalar_K)
 
     x_scaled  = s[:, None] * x
     
-    x_pred = np.zeros_like(x_obs)
+    x_pred = np.zeros_like(x_obs) # (n_obs, n_biomarkers)
+    # print("Breakpoint 2 Theta: ", x_pred.shape, t_obs.shape, t_span.shape, x_scaled.shape)
     for j in range(n_biomarkers):
-        x_pred[j] = np.interp(t_obs, t_span, x_scaled [j])
+        x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j])
 
     residuals = x_obs - x_pred
     loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))
@@ -112,7 +113,7 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     df_obs = np.zeros_like(x_obs)
     for i in range(n_biomarkers):
         cs_integ = CubicSpline(t_span, cum_int[i], extrapolate=True)
-        df_obs[i] = cs_integ(t_obs)
+        df_obs[:,i] = cs_integ(t_obs)
         
     ## wrt s_k
     Kx_plus_f = (K @ x) + f[:, None]  # n_biomarkers x len(t_span)
@@ -121,21 +122,23 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     scalar_obs = np.zeros_like(x_obs)
     for i in range(n_biomarkers):
         interp_fn = CubicSpline(t_span, scalar_expr[i], extrapolate=True)
-        scalar_obs[i] = interp_fn(t_obs)
+        scalar_obs[:,i] = interp_fn(t_obs)
 
-    grad_f = -2 * np.sum(residuals * (df_obs * s[:, None]), axis=1) + np.sign(f) * lamda
-    grad_s = -2 * np.sum(residuals, axis=1) # wrt to a
+    grad_f = -2 * np.sum(residuals * (df_obs * s[None, :]), axis=0) + np.sign(f) * lamda
+    grad_s = -2 * np.sum(residuals, axis=0) # wrt to a
     grad_scalar_K = np.array([-2 * np.sum(residuals * scalar_obs)])
+
+    # print("Breakpoint 3 grad: ", grad_f.size, grad_s.size, np.size(grad_scalar_K))
 
     grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
     return loss, grad
 
-def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
-              iteration: int, K: np.ndarray,
-              t_span: np.ndarray, step: float = 0.1,
-              use_jacobian: bool = False, lamda: float = 1,
-              scalar_K_guess: float = None,
+def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndarray,
+              t_span: np.ndarray, step: float = 0.1, use_jacobian: bool = False, 
+              lamda: float = 1,
+              beta_pred: np.ndarray = None,
               f_guess: np.ndarray = None,
+              scalar_K_guess: float = None,
               s_guess: np.ndarray = None,
               rng: np.random.Generator = None) -> tuple:
     """
@@ -161,15 +164,13 @@ def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
     tuple
         x0_fixed (np.ndarray), f_fit (np.ndarray)
     """
-    
     if rng is None:
         rng = np.random.default_rng(75)
+        
+    t_pred = dt_obs + beta_pred[ids]
     
-    t_obs = df_opt["dt"].values + beta_iter[str(iteration)].values
-    x_obs = df_opt[[col for col in df_opt.columns if "biomarker_" in col]].values.T
-
     # fixed vars
-    n_biomarkers = x_obs.shape[0]
+    n_biomarkers = X_obs.shape[1]
     x0_fixed = np.zeros(n_biomarkers)
     
     # inital guesses if None
@@ -197,7 +198,7 @@ def fit_theta(df_opt: pd.DataFrame, beta_iter: pd.DataFrame,
     result = minimize(
         loss_function,
         initial_params,
-        args=(t_obs, x_obs, K, step, t_span, lamda),
+        args=(t_pred, X_obs, K, step, t_span, lamda),
         method="L-BFGS-B",
         jac=use_jacobian,
         bounds=bounds
