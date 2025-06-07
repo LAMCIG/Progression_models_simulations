@@ -145,6 +145,7 @@ class EM(BaseEstimator, TransformerMixin):
                                       )
             
             current_x0, current_f, current_s, current_scalar_K = current_theta
+            
             X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
             # print("Breakpoint 7: ", X_pred.shape, X_pred.dtype)
             theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
@@ -162,7 +163,7 @@ class EM(BaseEstimator, TransformerMixin):
             
                 #print("breakpoint 6: ", x_obs_i.shape, x_obs_i.dtype,dt_i.shape, dt_i.dtype, cog_i.shape, cog_i.dtype, beta_i)  
                 #print("breakpoint 8: ", current_cog_a.shape)
-            
+                #print("breakpoint pre-Beta", type(current_f))
                 beta_i = estimate_beta_for_patient(beta_i=beta_i, X_obs_i=x_obs_i, dt_i=dt_i,
                                                    X_pred=X_pred, t_span=self.t_span,
                                                    cog_i = cog_i, cog_a = current_cog_a, cog_b = current_cog_b,
