@@ -50,8 +50,10 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     """
     
     n_biomarkers = X_obs_i.shape[1]  # X_pred.shape[0]
-    f = theta[n_biomarkers:2*n_biomarkers]
-    s = theta[2*n_biomarkers:3*n_biomarkers]
+    #print(type(theta), len(theta), theta)
+    f = theta[1]
+    #print(f.size)
+    s = theta[2]
     scalar_K = theta[-1]
     
     t_pred_i = dt_i + beta_i 
@@ -84,8 +86,8 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
         # print(K.shape)
         # print(x_t.shape)
         #print(f)
-        print(type(f))
-        print(f.shape) # find out why the type changes
+        #print(type(f))
+        #print(f.shape) # find out why the type changes
         
         conn_term = np.array(scalar_K * K @ x_t + np.array(f))
         
