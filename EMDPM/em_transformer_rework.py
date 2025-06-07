@@ -94,7 +94,7 @@ class EM(BaseEstimator, TransformerMixin):
         ## initialize histories
         theta_history = np.zeros((initial_theta.shape[0], self.num_iterations + 1)) # extra column added for initial guesses
         beta_history = np.zeros((n_patients, self.num_iterations + 1))
-        lse_history = np.zeros((n_patients, self.num_iterations + 1))
+        lse_history = np.zeros(self.num_iterations + 1)
         cog_regression_history = np.zeros((n_cog_features + 1, self.num_iterations + 1))  # + 1 is for intercept
         
         ## Append initial values to histories
@@ -152,6 +152,7 @@ class EM(BaseEstimator, TransformerMixin):
             
             # TODO: Attempt parallel beta computation
             ### beta comuputaiton
+            current_beta = np.zeros(n_patients)
             for idx, patient_id in enumerate(np.unique(ids)):
                 mask = (ids == patient_id)
                 x_obs_i = X[mask]  # (n_obs_i, n_biomarkers)
@@ -169,13 +170,14 @@ class EM(BaseEstimator, TransformerMixin):
                                                    use_jacobian = self.use_jacobian, t_max = self.t_max
                                                    )
                 
-                beta_history[idx, hist_idx] = beta_i
-                
                 if self.use_jacobian:
                     res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, initial_theta, K, self.lambda_cog)
                 else:
                     res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, self.lambda_cog)
                 lse += res
+                
+                current_beta[idx] = beta_i 
+            beta_history[:,hist_idx] = current_beta
 
             if self.use_jacobian and lse > best_lse and not jacobian_switched:
                 print(f"warning: jacobian toggled off due to increase in LSE at iteration {loop_iter}.")

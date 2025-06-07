@@ -50,8 +50,8 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     """
     
     n_biomarkers = X_obs_i.shape[1]  # X_pred.shape[0]
-    f = theta[:n_biomarkers]
-    s = theta[n_biomarkers:2*n_biomarkers]
+    f = theta[n_biomarkers:2*n_biomarkers]
+    s = theta[2*n_biomarkers:3*n_biomarkers]
     scalar_K = theta[-1]
     
     t_pred_i = dt_i + beta_i 
@@ -77,11 +77,23 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
         
         assert x_t.ndim == 1 and x_t.shape[0] == n_biomarkers
         assert np.issubdtype(x_t.dtype, np.floating)
-        #print("breakpoint 5: ", x_t.shape, (K @ x_t).shape, np.size((scalar_K * K @ x_t + f)), np.diag(x_t).shape, np.size(((np.eye(n_biomarkers) - np.diag(x_t)) @ (scalar_K * K @ x_t + f))))
-        y = (np.eye(n_biomarkers) - np.diag(x_t)) @ (scalar_K * K @ x_t + f)
-        print("y shape", y.shape, "y dtype", y.dtype, "y contents", y)
         
-        dxdt_interp_i[:, j] = (np.eye(n_biomarkers) - np.diag(x_t)) @ (scalar_K * K @ x_t + f)
+        #print(type(f), f.shape)
+        
+        # print(scalar_K)
+        # print(K.shape)
+        # print(x_t.shape)
+        #print(f)
+        print(type(f))
+        print(f.shape) # find out why the type changes
+        
+        conn_term = np.array(scalar_K * K @ x_t + np.array(f))
+        
+        #print("breakpoint 5: ", x_t.shape, (K @ x_t).shape, np.diag(x_t).shape, np.size(((np.eye(n_biomarkers) - np.diag(x_t)) @ (scalar_K * K @ x_t + f))))
+        #y = (np.eye(n_biomarkers) - np.diag(x_t)) @ (scalar_K * K @ x_t + f)
+        #print("y shape", y.shape, "y dtype", y.dtype, "y contents", y)
+        
+        dxdt_interp_i[:, j] = (np.eye(n_biomarkers) - np.diag(x_t)) @ conn_term
         grad_reconstruction = -2 * np.sum(residuals * dxdt_interp_i)
     # print("cog params:", cog_i.shape, cog_a.shape, np.size(cog_b))
     cog_pred = cog_i @ cog_a + cog_b
