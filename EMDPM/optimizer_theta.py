@@ -6,9 +6,10 @@ from scipy.integrate import cumulative_simpson
 from scipy.interpolate import CubicSpline
 from .utils import solve_system
 
+from scipy.optimize import approx_fprime
+
 def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
-               K: np.ndarray, step: float = 0.1, t_span: np.ndarray = None,
-               lamda: float = 1) -> tuple:
+               K: np.ndarray, t_span: np.ndarray = None, lamda: float = 1) -> tuple:
     """
     Computes residual loss and gradient for estimating the ODE forcing term f.
 
@@ -53,10 +54,9 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))
 
     return loss
-
+   
 def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
-               K: np.ndarray, step: float = 0.1, t_span: np.ndarray = None,
-               lamda: float = 0.01) -> tuple:
+               K: np.ndarray, t_span: np.ndarray = None, lamda: float = 0.01) -> tuple:
     """
     Computes residual loss and gradient for estimating the ODE forcing term f.
 
@@ -125,16 +125,32 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         scalar_obs[:,i] = interp_fn(t_obs)
 
     grad_f = -2 * np.sum(residuals * (df_obs * s[None, :]), axis=0) + np.sign(f) * lamda
+    
+    param_ref = np.concatenate([f, s, [scalar_K]])
+
+    def full_loss_fn(param_vec):
+        return theta_loss(param_vec, t_obs, x_obs, K, t_span=t_span, lamda=lamda)
+
+    # approximate gradient
+    #numerical_grad = approx_fprime(param_ref, full_loss_fn, epsilon=1e-6)
+    #numerical_grad_f = numerical_grad[:n_biomarkers]
+    #numerical_grad_s = numerical_grad[n_biomarkers:2*n_biomarkers]
+    #numerical_grad_scalar_K = numerical_grad[-1]
+    # Slice analytic gradient
+    #analytic_grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
+    
+    
     grad_s = -2 * np.sum(residuals, axis=0) # wrt to a
     grad_scalar_K = np.array([-2 * np.sum(residuals * scalar_obs)])
 
+    #print(grad_scalar_K.shape)
     # print("Breakpoint 3 grad: ", grad_f.size, grad_s.size, np.size(grad_scalar_K))
-
     grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
+    #grad = np.concatenate([numerical_grad_f, numerical_grad_s, [numerical_grad_scalar_K]])
     return loss, grad
 
 def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndarray,
-              t_span: np.ndarray, step: float = 0.1, use_jacobian: bool = False, 
+              t_span: np.ndarray, use_jacobian: bool = False, 
               lamda: float = 1,
               beta_pred: np.ndarray = None,
               f_guess: np.ndarray = None,
@@ -198,7 +214,7 @@ def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndar
     result = minimize(
         loss_function,
         initial_params,
-        args=(t_pred, X_obs, K, step, t_span, lamda),
+        args=(t_pred, X_obs, K, t_span, lamda),
         method="L-BFGS-B",
         jac=use_jacobian,
         bounds=bounds

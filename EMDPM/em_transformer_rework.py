@@ -117,7 +117,7 @@ class EM(BaseEstimator, TransformerMixin):
             if self.use_jacobian:
                 res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K, self.lambda_cog)
             else:
-                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, self.lambda_cog)
+                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, self.lambda_cog)
             initial_lse += res
             
         #print(f"LSE Prepend complete! LSE: {initial_lse}")
@@ -138,14 +138,13 @@ class EM(BaseEstimator, TransformerMixin):
         while loop_iter < self.num_iterations:
             hist_idx = loop_iter + 1
             current_theta = fit_theta(X_obs=X, dt_obs=dt, ids=ids, K=K,
-                                             t_span=self.t_span, step=self.step,
-                                             use_jacobian=self.use_jacobian, lamda=self.lamda,
-                                             beta_pred=current_beta, f_guess=current_f, s_guess=initial_s,
-                                             scalar_K_guess=current_scalar_K, rng=rng
+                                             t_span=self.t_span, use_jacobian=self.use_jacobian,
+                                             lamda=self.lamda, beta_pred=current_beta, f_guess=current_f,
+                                             s_guess=initial_s, scalar_K_guess=current_scalar_K, rng=rng
                                       )
             
             current_x0, current_f, current_s, current_scalar_K = current_theta
-            
+            current_theta = np.concatenate((current_f, current_s, [current_scalar_K]))
             X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
             # print("Breakpoint 7: ", X_pred.shape, X_pred.dtype)
             theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
@@ -172,9 +171,9 @@ class EM(BaseEstimator, TransformerMixin):
                                                    )
                 
                 if self.use_jacobian:
-                    res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, initial_theta, K, self.lambda_cog)
+                    res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, current_theta, K, self.lambda_cog)
                 else:
-                    res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, self.lambda_cog)
+                    res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, current_theta, self.lambda_cog)
                 lse += res
                 
                 current_beta[idx] = beta_i 
@@ -192,8 +191,8 @@ class EM(BaseEstimator, TransformerMixin):
             # TODO: Get idk of best lse
             lse_history[hist_idx] = lse
             
-            #current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta)
-            #cog_regression_history[:, hist_idx] = np.concatenate([current_cog_a, [current_cog_b]])
+            current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta)
+            cog_regression_history[:, hist_idx] = np.concatenate([current_cog_a, [current_cog_b]])
             
             loop_iter += 1
             pbar.update(1)
