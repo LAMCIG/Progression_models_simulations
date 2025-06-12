@@ -6,8 +6,6 @@ from scipy.integrate import cumulative_simpson
 from scipy.interpolate import CubicSpline
 from .utils import solve_system
 
-from scipy.optimize import approx_fprime
-
 def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
                K: np.ndarray, t_span: np.ndarray = None, lamda: float = 1) -> tuple:
     """
@@ -183,7 +181,13 @@ def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndar
     if rng is None:
         rng = np.random.default_rng(75)
         
-    t_pred = dt_obs + beta_pred[ids]
+    unique_ids = np.unique(ids)
+    id_to_index = {pid: i for i, pid in enumerate(unique_ids)}
+    index_array = np.array([id_to_index[i] for i in ids])  # shape: (n_obs,)
+    t_pred = dt_obs + beta_pred[index_array]
+    
+    #print("t_pred: ", t_pred.shape)
+    # t_pred = dt_obs + beta_pred[ids]
     
     # fixed vars
     n_biomarkers = X_obs.shape[1]
