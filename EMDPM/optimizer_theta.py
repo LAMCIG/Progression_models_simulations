@@ -112,7 +112,9 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     for i in range(n_biomarkers):
         cs_integ = CubicSpline(t_span, cum_int[i], extrapolate=True)
         df_obs[:,i] = cs_integ(t_obs)
-        
+    
+    grad_f = -2 * np.sum(residuals * (df_obs * s[None, :]), axis=0) + np.sign(f) * lamda
+    
     ## wrt s_k
     Kx_plus_f = (K @ x) + f[:, None]  # n_biomarkers x len(t_span)
     scalar_expr = (1 - x) * Kx_plus_f
@@ -122,29 +124,10 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         interp_fn = CubicSpline(t_span, scalar_expr[i], extrapolate=True)
         scalar_obs[:,i] = interp_fn(t_obs)
 
-    grad_f = -2 * np.sum(residuals * (df_obs * s[None, :]), axis=0) + np.sign(f) * lamda
-    
-    param_ref = np.concatenate([f, s, [scalar_K]])
-
-    def full_loss_fn(param_vec):
-        return theta_loss(param_vec, t_obs, x_obs, K, t_span=t_span, lamda=lamda)
-
-    # approximate gradient
-    #numerical_grad = approx_fprime(param_ref, full_loss_fn, epsilon=1e-6)
-    #numerical_grad_f = numerical_grad[:n_biomarkers]
-    #numerical_grad_s = numerical_grad[n_biomarkers:2*n_biomarkers]
-    #numerical_grad_scalar_K = numerical_grad[-1]
-    # Slice analytic gradient
-    #analytic_grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
-    
-    
-    grad_s = -2 * np.sum(residuals, axis=0) # wrt to a
     grad_scalar_K = np.array([-2 * np.sum(residuals * scalar_obs)])
+    grad_s = -2 * np.sum(residuals * x_pred, axis=0) # supremum
 
-    #print(grad_scalar_K.shape)
-    # print("Breakpoint 3 grad: ", grad_f.size, grad_s.size, np.size(grad_scalar_K))
     grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
-    #grad = np.concatenate([numerical_grad_f, numerical_grad_s, [numerical_grad_scalar_K]])
     return loss, grad
 
 def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndarray,
