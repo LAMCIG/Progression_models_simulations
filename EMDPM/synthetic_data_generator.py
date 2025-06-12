@@ -64,8 +64,9 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
         x_obs = x_true[:, np.searchsorted(t, t_obs)] + rng.normal(0, noise_level, (n_biomarkers, n_patient_obs))
         x_obs = x_obs.clip(0, 1)
         
-        cognitive_scores = cog_a*(t_obs + rng.normal(0, 1, size=n_patient_obs)) + cog_b + cog_noise
-
+        cognitive_scores = cog_a*(t_obs + rng.normal(0, 1, size=n_patient_obs)) + cog_b #+ cog_noise
+        beta_true_dict[patient_id] = first_visit
+        
         for i in range(n_patient_obs):
             X.append([patient_id, t_cumsum[i], cognitive_scores[i], beta_true_dict[patient_id]] + list(x_obs[:, i]))
 

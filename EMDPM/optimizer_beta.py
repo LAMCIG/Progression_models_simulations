@@ -22,6 +22,7 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     s = theta[n_biomarkers:2*n_biomarkers] # (n_biomarkers)
     
     t_pred_i = dt_i + beta_i
+    #print("t_pred_i", t_pred_i.shape, "dt_i", dt_i.shape)
     
     X_interp_i = np.array([
         np.interp(t_pred_i, t_span, s[b] * X_pred[b]) # applying supremum
@@ -29,7 +30,11 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     ])
     
     X_obs_i_T = X_obs_i.T  # now (n_biomarkers, n_obs_i)
+    
+    #if X_obs_i_T.shape[0] != X_interp_i.shape[0]:
+    #    print("X_obs_i", X_obs_i_T.shape, "X_interp_i", X_interp_i.shape)
     residuals = X_obs_i_T - X_interp_i
+    
     loss = np.sum(residuals ** 2)
 
     cog_pred = cog_i @ cog_a + cog_b  # shape (n_visits_i,)
@@ -58,21 +63,19 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
         Residual sum of squares and gradient with respect to beta_i.
     """
     n_biomarkers = X_pred.shape[0]         # int
-    f = theta[:n_biomarkers]               # (n_biomarkers)
-    s = theta[n_biomarkers:2*n_biomarkers] # (n_biomarkers)
+    f = theta[:n_biomarkers]               # (n_biomarkers,)
+    s = theta[n_biomarkers:2*n_biomarkers] # (n_biomarkers,)
     scalar_K = theta[-1]                   # float
 
-    t_pred_i = dt_i + beta_i 
+    t_pred_i = dt_i + beta_i               # (n_visits_i,)
 
     X_interp_i = np.array([
         np.interp(t_pred_i, t_span, s[b] * X_pred[b])
         for b in range(X_pred.shape[0])
     ])
 
-    X_obs_i_T = X_obs_i.T  # (n_biomarkers, n_visits_i)
-    residuals = X_obs_i_T - X_interp_i
-    
-    #print("residual terms: ", X_obs_i_T.shape, X_interp_i.shape)
+    X_obs_i_T = X_obs_i.T                  # (n_biomarkers, n_visits_i)
+    residuals = X_obs_i_T - X_interp_i     
 
     # dx/dt = (I - diag(x)) @ (scalar_K K x + f)
     

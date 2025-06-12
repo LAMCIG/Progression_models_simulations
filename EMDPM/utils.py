@@ -64,4 +64,6 @@ def initialize_beta(ids: np.ndarray, beta_range: tuple = (0, 12), rng: np.random
     if rng is None:
         rng = np.random.default_rng(75)
     patient_ids = np.unique(ids)
-    return rng.uniform(beta_range[0], beta_range[1], size=len(patient_ids))
+    initial_beta = rng.uniform(beta_range[0], beta_range[1], size=len(patient_ids))
+    
+    return initial_beta
