@@ -4,14 +4,14 @@ import pandas as pd
 
 # TODO: add general params for all plots
 
-def plot_biomarker_trajectories(biom_trajectories: np.ndarray, t_span: np.ndarray, n_biomarkers: int = 68) -> None:
+def plot_biomarker_trajectories(t: np.ndarray, x_true: np.ndarray, n_biomarkers: int = 10) -> None:
     """
     Plots ground truth biomarker trajectories over time.
     """
-    plt.figure(figsize=(15,6))
     colors = plt.cm.rainbow(np.linspace(0, 1, n_biomarkers))
-    for b in range(n_biomarkers):
-        plt.plot(t_span, biom_trajectories[b], color = colors[b])
+    plt.figure(figsize=(10, 4))
+    for i in range(n_biomarkers):
+        plt.plot(t, x_true[i], label=f'biomarker {i+1}', color=colors[i])
     plt.title("biomarker trajectories")
     plt.legend()
     plt.show()
@@ -147,28 +147,30 @@ def plot_beta_error_history(beta_iter: pd.DataFrame, df: pd.DataFrame, num_itera
     plt.ylabel("mean beta error")
     plt.show()
     
-def plot_lse(lse_array: np.ndarray) -> None:
+def plot_lse(lse_array: list) -> None:
     """
     Plots LSE trace across iterations.
     """
     plt.figure(figsize=(10, 4))
     plt.plot(np.arange(len(lse_array)), lse_array)
-    plt.yscale('log')
     plt.xlabel("iteration")
     plt.ylabel("LSE")
     plt.show()
 
-def plot_cog_regression_history(cog_history: np.ndarray, labels: list):
-    n_params, num_iterations = cog_history.shape
-    plt.figure(figsize=(10, 5))
-    for i in range(n_params):
-        label = f"{labels[i]}_coeff" if i < n_params - 1 else "b"
-        plt.plot(range(num_iterations), cog_history[i,:], label=label)
-    plt.legend
-    plt.xlabel("iteration")
-    plt.ylabel("estimated coefficient value")
-    plt.title("cog parameters")
-    plt.grid(True)
-    plt.show()
+def plot_cog_regression_history(cog_history: list) -> None:
+    """
+    Plots history of cognitive regression parameters a and b over EM iterations.
+    """
+    cog_history = np.array(cog_history)
+    a_vals = cog_history[:, 0]
+    b_vals = cog_history[:, 1]
 
+    plt.figure(figsize=(10, 4))
+    plt.plot(a_vals, color="red", label="a")
+    plt.plot(b_vals, color="blue", label="b")
+    plt.xlabel("iteration")
+    plt.ylabel("value")
+    plt.title("cognitive regression parameters")
+    plt.legend()
+    plt.show()
 

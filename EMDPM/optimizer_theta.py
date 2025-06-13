@@ -1,6 +1,4 @@
 import numpy as np
-import pandas as pd
-from random import seed
 from scipy.optimize import minimize
 from scipy.integrate import cumulative_simpson
 from scipy.interpolate import CubicSpline
@@ -187,9 +185,9 @@ def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndar
     initial_params = np.concatenate([f_guess, s_guess, [scalar_K_guess]])
     
     # bounds
-    bounds_f = [(0, 0.2)] * n_biomarkers
-    bounds_s = [(0.1, 4.0)] * n_biomarkers  # supremum scaling
-    bounds_scalar_K = [(0.01, 5.0)] 
+    bounds_f = [(0.0, np.inf)] * n_biomarkers
+    bounds_s = [(0.0, np.inf)] * n_biomarkers  # supremum scaling
+    bounds_scalar_K = [(0.0, np.inf)] 
 
     bounds = bounds_f + bounds_s + bounds_scalar_K
      

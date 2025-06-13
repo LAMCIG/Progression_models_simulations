@@ -75,7 +75,8 @@ class EM(BaseEstimator, TransformerMixin):
         initial_x0 = np.zeros(n_biomarkers)
         initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
         initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
-        initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
+        # initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
+        initial_scalar_K = np.max(X)
         initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
         
         # beta
@@ -143,7 +144,7 @@ class EM(BaseEstimator, TransformerMixin):
         while loop_iter < self.num_iterations:
             hist_idx = loop_iter + 1
             current_theta = fit_theta(X_obs=X, dt_obs=dt, ids=ids, K=K,
-                                             t_span=self.t_span, use_jacobian=self.use_jacobian,
+                                             t_span=self.t_span, use_jacobian=True,
                                              lamda=self.lamda, beta_pred=current_beta, f_guess=current_f,
                                              s_guess=current_s, scalar_K_guess=current_scalar_K, rng=rng
                                       )
