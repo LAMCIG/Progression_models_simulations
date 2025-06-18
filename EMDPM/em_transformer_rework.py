@@ -19,8 +19,9 @@ class EM(BaseEstimator, TransformerMixin):
                  t_max: float = 12,
                  step: float = 0.01,
                  use_jacobian: bool = False,
-                 lamda: float = 0.01,
+                 lambda_f: float = 0.01,
                  lambda_cog: float = 0,
+                 lambda_scalar: float = 0.0,
                  rng: np.random.Generator = None
                  ):
 
@@ -31,8 +32,9 @@ class EM(BaseEstimator, TransformerMixin):
         self.rng = np.random.default_rng(75)
         
         # [hyperparameters]
-        self.lamda = lamda # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
+        self.lambda_f = lambda_f # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
         self.lambda_cog = lambda_cog
+        self.lambda_scalar = lambda_scalar
         
         ## [jacobian switching logic]
         self.use_jacobian = use_jacobian
@@ -43,6 +45,7 @@ class EM(BaseEstimator, TransformerMixin):
             ids: np.ndarray,
             cog: np.ndarray,
             K: np.ndarray,
+            initial_beta: np.ndarray = None,
             save_path: str = None):
         """
         Run the EM loop to estimate theta (ODE params) and beta (patient shifts).
@@ -80,8 +83,9 @@ class EM(BaseEstimator, TransformerMixin):
         initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
         
         # beta
-        initial_beta = initialize_beta(ids=ids, beta_range=(0, self.t_max), rng=rng)
-        
+        if initial_beta is None:
+            initial_beta = initialize_beta(ids=ids, beta_range=(0, self.t_max), rng=rng)
+            
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
@@ -126,10 +130,9 @@ class EM(BaseEstimator, TransformerMixin):
                 res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, self.lambda_cog)
             initial_lse += res
             
-        print(f"prepend complete")
         lse_history[0] = initial_lse
         
-        ## initialize current vars for main loop
+        # initialize current vars for main loop
         current_beta = initial_beta
         current_f = initial_f
         current_s = initial_s
@@ -137,27 +140,27 @@ class EM(BaseEstimator, TransformerMixin):
         current_cog_a = initial_cog_a
         current_cog_b = initial_cog_b
         
-        ## MAIN LOOP
+        print(f"prepend complete")
+        ### MAIN LOOP ###
         loop_iter = 0
         
         pbar = tqdm(total=self.num_iterations)
         while loop_iter < self.num_iterations:
             hist_idx = loop_iter + 1
             current_theta = fit_theta(X_obs=X, dt_obs=dt, ids=ids, K=K,
-                                             t_span=self.t_span, use_jacobian=True,
-                                             lamda=self.lamda, beta_pred=current_beta, f_guess=current_f,
+                                             t_span=self.t_span, use_jacobian=self.use_jacobian,
+                                             lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
+                                             beta_pred=current_beta, f_guess=current_f,
                                              s_guess=current_s, scalar_K_guess=current_scalar_K, rng=rng
                                       )
             
             current_x0, current_f, current_s, current_scalar_K = current_theta
             current_theta = np.concatenate((current_f, current_s, [current_scalar_K]))
             X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
-            # print("Breakpoint 7: ", X_pred.shape, X_pred.dtype)
             theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
             lse = 0.0
             
             # TODO: Attempt parallel beta computation
-            ## WHY DID I HAVE beta_current = zeros(n_biomarkers)??
             ### beta comuputaiton
             for idx, patient_id in enumerate(np.unique(ids)):
                 mask = (ids == patient_id)
@@ -175,7 +178,7 @@ class EM(BaseEstimator, TransformerMixin):
                                                    X_pred=X_pred, t_span=self.t_span,
                                                    cog_i = cog_i, cog_a = current_cog_a, cog_b = current_cog_b,
                                                    theta = current_theta, K=K, lambda_cog = self.lambda_cog,
-                                                   use_jacobian = self.use_jacobian, t_max = self.t_max
+                                                   use_jacobian = True, t_max = self.t_max
                                                    )
        
                 if self.use_jacobian == True:
@@ -188,10 +191,11 @@ class EM(BaseEstimator, TransformerMixin):
             beta_history[:,hist_idx] = current_beta
 
             #if self.use_jacobian and lse > best_lse and not jacobian_switched:
-            if self.use_jacobian and best_lse - lse > 1e-3 * best_lse and not jacobian_switched:
-                print(f"warning: jacobian toggled off due to increase in LSE at iteration {loop_iter}.")
-                self.use_jacobian = False
-                jacobian_switched = True
+            # if self.use_jacobian and best_lse - lse > 1e-3 * best_lse and not jacobian_switched:
+            if best_lse - lse > 1e-3 * best_lse:
+                self.use_jacobian = not self.use_jacobian
+                print(f"warning: toggling jacobian: {self.use_jacobian} due to increase or convergence in LSE at iteration {loop_iter}.")
+                #jacobian_switched = True
                 
             # if best_lse - lse > 1e-3 * best_lse
                 # continue # skip storing values for current iteration. if True --> DONT UPDATE and RETRY

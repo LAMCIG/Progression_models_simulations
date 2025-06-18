@@ -160,7 +160,7 @@ def plot_lse(lse_array: np.ndarray) -> None:
 
 def plot_cog_regression_history(cog_history: np.ndarray, labels: list):
     n_params, num_iterations = cog_history.shape
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(8, 5))
     for i in range(n_params):
         label = f"{labels[i]}_coeff" if i < n_params - 1 else "b"
         plt.plot(range(num_iterations), cog_history[i,:], label=label)
