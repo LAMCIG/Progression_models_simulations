@@ -5,7 +5,7 @@ from scipy.interpolate import CubicSpline
 from .utils import solve_system
 
 def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
-               K: np.ndarray, t_span: np.ndarray = None, lamda: float = 1) -> tuple:
+               K: np.ndarray, t_span: np.ndarray, lambda_f: float, lambda_scalar: float) -> tuple:
     """
     Computes residual loss and gradient for estimating the ODE forcing term f.
 
@@ -23,7 +23,7 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         Time step for integration.
     t_span : np.ndarray
         Time points for trajectory simulation.
-    lamda : float, optional
+    lambda_f : float, optional
         Regularization strength.
 
     Returns
@@ -47,12 +47,12 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j])
 
     residuals = x_obs - x_pred
-    loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))
+    loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + lambda_scalar * scalar_K**2
 
     return loss
    
 def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
-               K: np.ndarray, t_span: np.ndarray = None, lamda: float = 0.01) -> tuple:
+               K: np.ndarray, t_span: np.ndarray, lambda_f: float, lambda_scalar: float) -> tuple:
     """
     Computes residual loss and gradient for estimating the ODE forcing term f.
 
@@ -70,7 +70,7 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         Time step for integration.
     t_span : np.ndarray
         Time points for trajectory simulation.
-    lamda : float, optional
+    lambda_f : float, optional
         Regularization strength.
 
     Returns
@@ -96,7 +96,7 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j])
 
     residuals = x_obs - x_pred
-    loss = np.sum(residuals**2) + lamda * np.sum(np.abs(f))
+    loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + lambda_scalar * (scalar_K**2)
 
     ### gradient computations
     
@@ -111,7 +111,7 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         cs_integ = CubicSpline(t_span, cum_int[i], extrapolate=True)
         df_obs[:,i] = cs_integ(t_obs)
     
-    grad_f = -2 * np.sum(residuals * (df_obs * s[None, :]), axis=0) + np.sign(f) * lamda
+    grad_f = -2 * np.sum(residuals * (df_obs * s[None, :]), axis=0) + np.sign(f) * lambda_f
     
     ## wrt s_k
     Kx_plus_f = (K @ x) + f[:, None]  # n_biomarkers x len(t_span)
@@ -122,19 +122,19 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         interp_fn = CubicSpline(t_span, scalar_expr[i], extrapolate=True)
         scalar_obs[:,i] = interp_fn(t_obs)
 
-    grad_scalar_K = np.array([-2 * np.sum(residuals * scalar_obs)])
+    grad_scalar_K = -2 * np.sum(residuals * scalar_obs) + 2 * lambda_scalar * scalar_K
     grad_s = -2 * np.sum(residuals * x_pred, axis=0) # supremum
 
-    grad = np.concatenate([grad_f, grad_s, grad_scalar_K])
+    # print(grad_f.shape, grad_s.shape, grad_scalar_K.shape)
+    # print(grad_f, grad_s, grad_scalar_K)
+    grad = np.concatenate([grad_f, grad_s, [grad_scalar_K]])
     return loss, grad
 
 def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndarray,
-              t_span: np.ndarray, use_jacobian: bool = False, 
-              lamda: float = 1,
-              beta_pred: np.ndarray = None,
-              f_guess: np.ndarray = None,
-              scalar_K_guess: float = None,
-              s_guess: np.ndarray = None,
+              t_span: np.ndarray, use_jacobian: bool, 
+              lambda_f: float, lambda_scalar: float,
+              beta_pred: np.ndarray = None, 
+              f_guess: np.ndarray = None, scalar_K_guess: float = None, s_guess: np.ndarray = None,
               rng: np.random.Generator = None) -> tuple:
     """
     Optimizes the ODE forcing term f (theta) for current EM iteration.
@@ -199,7 +199,7 @@ def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndar
     result = minimize(
         loss_function,
         initial_params,
-        args=(t_pred, X_obs, K, t_span, lamda),
+        args=(t_pred, X_obs, K, t_span, lambda_f, lambda_scalar),
         method="L-BFGS-B",
         jac=use_jacobian,
         bounds=bounds
