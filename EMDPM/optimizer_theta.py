@@ -1,8 +1,9 @@
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, LinearConstraint
 from scipy.integrate import cumulative_simpson
 from scipy.interpolate import CubicSpline
 from .utils import solve_system
+
 
 def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
                K: np.ndarray, t_span: np.ndarray, lambda_f: float, lambda_scalar: float) -> tuple:
@@ -35,11 +36,12 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
 
     f = params[:n_biomarkers]
     s = params[n_biomarkers:2*n_biomarkers]
+    s0 = params[2*n_biomarkers:3*n_biomarkers]
     scalar_K = params[-1]
     x0 = np.zeros(n_biomarkers)
     # print("Breakpoint 1 Theta: ", n_biomarkers, x0.shape, f.shape, K.shape, t_span.shape)
     x = solve_system(x0, f, K, t_span, scalar_K)
-    x_scaled  = s[:, None] * x
+    x_scaled  = s[:, None] * x + s0[:, None]
     
     x_pred = np.zeros_like(x_obs) # (n_obs, n_biomarkers)
     # print("Breakpoint 2 Theta: ", x_pred.shape, t_obs.shape, t_span.shape, x_scaled.shape)
@@ -83,12 +85,13 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     # unpack parameters
     f = params[:n_biomarkers]
     s = params[n_biomarkers:2*n_biomarkers]
+    s0 = params[2*n_biomarkers:3*n_biomarkers]
     scalar_K = params[-1]
     x0 = np.zeros(n_biomarkers)
     # print("Breakpoint 1 Theta: ", n_biomarkers, x0.shape, f.shape, K.shape, t_span.shape)
     x = solve_system(x0, f, K, t_span, scalar_K)
 
-    x_scaled  = s[:, None] * x
+    x_scaled  = s[:, None] * x + s0[:, None]
     
     x_pred = np.zeros_like(x_obs) # (n_obs, n_biomarkers)
     # print("Breakpoint 2 Theta: ", x_pred.shape, t_obs.shape, t_span.shape, x_scaled.shape)
@@ -124,17 +127,17 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
 
     grad_scalar_K = -2 * np.sum(residuals * scalar_obs) + 2 * lambda_scalar * scalar_K
     grad_s = -2 * np.sum(residuals * x_pred, axis=0) # supremum
-
+    grad_s0 = -2 * np.sum(residuals, axis = 0)
     # print(grad_f.shape, grad_s.shape, grad_scalar_K.shape)
     # print(grad_f, grad_s, grad_scalar_K)
-    grad = np.concatenate([grad_f, grad_s, [grad_scalar_K]])
+    grad = np.concatenate([grad_f, grad_s, grad_s0, [grad_scalar_K]])
     return loss, grad
 
 def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndarray,
               t_span: np.ndarray, use_jacobian: bool, 
               lambda_f: float, lambda_scalar: float,
               beta_pred: np.ndarray = None, 
-              f_guess: np.ndarray = None, scalar_K_guess: float = None, s_guess: np.ndarray = None,
+              f_guess: np.ndarray = None, scalar_K_guess: float = None, s_guess: np.ndarray = None, s0_guess: np.ndarray = None,
               rng: np.random.Generator = None) -> tuple:
     """
     Optimizes the ODE forcing term f (theta) for current EM iteration.
@@ -182,25 +185,51 @@ def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndar
     if scalar_K_guess is None:
         scalar_K_guess = 1.0
     
-    initial_params = np.concatenate([f_guess, s_guess, [scalar_K_guess]])
+    initial_params = np.concatenate([f_guess, s_guess, s0_guess, [scalar_K_guess]])
     
     # bounds
     bounds_f = [(0.0, np.inf)] * n_biomarkers
-    bounds_s = [(0.0, np.inf)] * n_biomarkers  # supremum scaling
+    bounds_s = [(-np.inf, np.inf)] * n_biomarkers  # supremum scaling
+    bounds_s0 = [(-np.inf, np.inf)] * n_biomarkers
     bounds_scalar_K = [(0.0, np.inf)] 
 
-    bounds = bounds_f + bounds_s + bounds_scalar_K
+    bounds = bounds_f + bounds_s + bounds_s0 + bounds_scalar_K
      
     if use_jacobian == True:
         loss_function = theta_loss_jac
     else:
         loss_function = theta_loss
+    
+    y_max = np.max(X_obs, axis = 0)
+    y_min = np.min(X_obs, axis = 0)
+    
+    #print("y_max:" ,y_max.shape)
+    #print("y_min:" ,y_min.shape)
+    #print(y_max)
+    
+    n_total = 3 * n_biomarkers + 1
 
+    A_top = np.zeros((n_biomarkers, n_total))
+    A_top[np.arange(n_biomarkers), n_biomarkers + np.arange(n_biomarkers)] = y_max  # s_k col
+    A_top[np.arange(n_biomarkers), 2*n_biomarkers + np.arange(n_biomarkers)] = 1.0  # s0_k col
+
+    A_bot = np.zeros((n_biomarkers, n_total))
+    A_bot[np.arange(n_biomarkers), n_biomarkers + np.arange(n_biomarkers)] = y_min
+    A_bot[np.arange(n_biomarkers), 2*n_biomarkers + np.arange(n_biomarkers)] = 1.0
+
+    A = np.vstack([A_top, A_bot])
+    lc = LinearConstraint(A=A, lb=0.0, ub=1.0)
+    
+    # = [{'type': 'ineq', 'fun': constr_func}]
+    # TODO: rewrite using [{}] syntax
+    
     result = minimize(
         loss_function,
         initial_params,
         args=(t_pred, X_obs, K, t_span, lambda_f, lambda_scalar),
+        #method="SLSQP",
         method="L-BFGS-B",
+        #constraints=lc,
         jac=use_jacobian,
         bounds=bounds
     )
@@ -208,6 +237,7 @@ def fit_theta(X_obs: np.ndarray, dt_obs: np.ndarray, ids: np.ndarray, K: np.ndar
     fitted_params = result.x
     f_fit = fitted_params[:n_biomarkers]
     s_fit = fitted_params[n_biomarkers:2*n_biomarkers]
+    s0_fit = fitted_params[2*n_biomarkers:3*n_biomarkers]
     scalar_K_fit = fitted_params[-1]
     
-    return x0_fixed, f_fit, s_fit, scalar_K_fit
+    return x0_fixed, f_fit, s_fit, s0_fit, scalar_K_fit
