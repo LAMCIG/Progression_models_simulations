@@ -34,7 +34,6 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     #if X_obs_i_T.shape[0] != X_interp_i.shape[0]:
     #    print("X_obs_i", X_obs_i_T.shape, "X_interp_i", X_interp_i.shape)
     residuals = X_obs_i_T - X_interp_i
-    
     loss = np.sum(residuals ** 2)
 
     cog_pred = cog_i @ cog_a + cog_b  # shape (n_visits_i,)
@@ -90,6 +89,8 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
     grad_cog = 2 * lambda_cog * np.sum(t_pred_i - cog_pred)
 
+    
+    
     loss = np.sum(residuals ** 2) + cog_prior
     grad = grad_reconstruction + grad_cog
     return loss, grad

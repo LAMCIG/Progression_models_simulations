@@ -71,16 +71,19 @@ class EM(BaseEstimator, TransformerMixin):
         
         ## initialize jacobian logic
         best_lse = np.inf # keep outside loop or else it resets
-        jacobian_switched = False
+        jacobian_toggle = self.use_jacobian
         
         ## initialize guesses
         # theta
         initial_x0 = np.zeros(n_biomarkers)
         initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
         initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
+        
+        current_s0 = np.zeros(n_biomarkers)
+        
         # initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
         initial_scalar_K = np.max(X)
-        initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
+        initial_theta = np.concatenate([initial_f, initial_s, current_s0, [initial_scalar_K]])
         
         # beta
         if initial_beta is None:
@@ -92,14 +95,6 @@ class EM(BaseEstimator, TransformerMixin):
         
         #initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
         #initial_cog_b = float(rng.uniform(0, 10)) # bias term
-        
-        ## move these later towards the end for a summary:
-        print("initial conditions:")
-        print(f"n_patients: {n_patients}, n_obs: {n_obs}")
-        print(f"initial f: {initial_f}")
-        print(f"initial s: {initial_s}")
-        print(f"initial scalar K: {initial_scalar_K}")
-        print(f"initial beta: {initial_beta.shape}")
         
         ## initialize histories
         theta_history = np.zeros((initial_theta.shape[0], self.num_iterations + 1)) # extra column added for initial guesses
@@ -140,6 +135,8 @@ class EM(BaseEstimator, TransformerMixin):
         current_cog_a = initial_cog_a
         current_cog_b = initial_cog_b
         
+        current_s0 = np.zeros(n_biomarkers)
+        
         print(f"prepend complete")
         ### MAIN LOOP ###
         loop_iter = 0
@@ -148,16 +145,16 @@ class EM(BaseEstimator, TransformerMixin):
         while loop_iter < self.num_iterations:
             hist_idx = loop_iter + 1
             current_theta = fit_theta(X_obs=X, dt_obs=dt, ids=ids, K=K,
-                                             t_span=self.t_span, use_jacobian=self.use_jacobian,
+                                             t_span=self.t_span, use_jacobian=jacobian_toggle,
                                              lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
-                                             beta_pred=current_beta, f_guess=current_f,
+                                             beta_pred=current_beta, f_guess=current_f, s0_guess=current_s0,
                                              s_guess=current_s, scalar_K_guess=current_scalar_K, rng=rng
                                       )
             
-            current_x0, current_f, current_s, current_scalar_K = current_theta
-            current_theta = np.concatenate((current_f, current_s, [current_scalar_K]))
+            current_x0, current_f, current_s, current_s0, current_scalar_K = current_theta
+            current_theta = np.concatenate((current_f, current_s, current_s0,[current_scalar_K]))
             X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
-            theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
+            theta_history[:,hist_idx] = np.concatenate((current_f, current_s, current_s0, [current_scalar_K]))
             lse = 0.0
             
             # TODO: Attempt parallel beta computation
@@ -191,15 +188,13 @@ class EM(BaseEstimator, TransformerMixin):
             beta_history[:,hist_idx] = current_beta
 
             #if self.use_jacobian and lse > best_lse and not jacobian_switched:
-            # if self.use_jacobian and best_lse - lse > 1e-3 * best_lse and not jacobian_switched:
-            if best_lse - lse > 1e-3 * best_lse:
-                self.use_jacobian = not self.use_jacobian
-                print(f"warning: toggling jacobian: {self.use_jacobian} due to increase or convergence in LSE at iteration {loop_iter}.")
-                #jacobian_switched = True
-                
-            # if best_lse - lse > 1e-3 * best_lse
-                # continue # skip storing values for current iteration. if True --> DONT UPDATE and RETRY
-                
+            if lse > best_lse - 1e-3 * best_lse:
+                if self.use_jacobian:
+                    jacobian_toggle = not jacobian_toggle
+                    print(f"jacobian toggle: {jacobian_toggle} due to increase or convergence in LSE at iteration {loop_iter}.")
+                continue
+            
+            
             ## update accepted
             best_lse = min(best_lse, lse)
             # TODO: Get idk of best lse
@@ -211,11 +206,20 @@ class EM(BaseEstimator, TransformerMixin):
             loop_iter += 1
             pbar.update(1)
             
-        final_theta = theta_history[:,-1]
-
-        print("\nSUMMARY:")
-        print("initial theta: ", initial_theta[0:10])
-        print("final theta: ", final_theta[0:10])
+        #final_theta = theta_history[:,-1]
+        
+                ## move these later towards the end for a summary:
+        print("initial conditions:")
+        print(f"initial f: {initial_f}")
+        print(f"initial s: {initial_s}")
+        print(f"initial scalar K: {initial_scalar_K}")
+        print(f"initial beta: {initial_beta}")
+        
+        print("current conditions:")
+        print(f"current f: {current_f}")
+        print(f"current s: {current_s}")
+        print(f"current scalar K: {current_scalar_K}")
+        print(f"current beta: {current_beta}")
         
         self.theta_history = theta_history
         self.beta_history = beta_history
