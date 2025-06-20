@@ -15,6 +15,18 @@ def plot_biomarker_trajectories(biom_trajectories: np.ndarray, t_span: np.ndarra
     plt.title("biomarker trajectories")
     plt.legend()
     plt.show()
+    
+def plot_observation(biom_trajectories: np.ndarray, t_span: np.ndarray, ids: np.ndarray, beta: np.ndarray) -> None:
+    plt.figure(figsize=(15,6))
+    
+    
+    
+    colors = plt.cm.rainbow(np.linspace(0, 1, n_biomarkers))
+    for b in range(n_biomarkers):
+        plt.plot(t_span, biom_trajectories[b], color = colors[b])
+    plt.title("biomarker trajectories")
+    plt.legend()
+    plt.show()
 
 def plot_true_observations(df: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, patient_idx=None) -> None:
     """

@@ -77,13 +77,12 @@ class EM(BaseEstimator, TransformerMixin):
         # theta
         initial_x0 = np.zeros(n_biomarkers)
         initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
-        initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
-        
-        current_s0 = np.zeros(n_biomarkers)
-        
-        # initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
+        # initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
+        initial_s = np.ones(n_biomarkers)*-1
+        initial_s0 = np.ones(n_biomarkers) * np.max(X, axis=0)
+
         initial_scalar_K = np.max(X)
-        initial_theta = np.concatenate([initial_f, initial_s, current_s0, [initial_scalar_K]])
+        initial_theta = np.concatenate([initial_f, initial_s, initial_s0, [initial_scalar_K]])
         
         # beta
         if initial_beta is None:
@@ -92,9 +91,6 @@ class EM(BaseEstimator, TransformerMixin):
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
-        
-        #initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
-        #initial_cog_b = float(rng.uniform(0, 10)) # bias term
         
         ## initialize histories
         theta_history = np.zeros((initial_theta.shape[0], self.num_iterations + 1)) # extra column added for initial guesses
@@ -134,8 +130,7 @@ class EM(BaseEstimator, TransformerMixin):
         current_scalar_K = initial_scalar_K
         current_cog_a = initial_cog_a
         current_cog_b = initial_cog_b
-        
-        current_s0 = np.zeros(n_biomarkers)
+        current_s0 = initial_s0
         
         print(f"prepend complete")
         ### MAIN LOOP ###
@@ -164,13 +159,7 @@ class EM(BaseEstimator, TransformerMixin):
                 X_obs_i = X[mask,:]  # (n_obs_i, n_biomarkers)
                 dt_i = dt[mask]    # (n_obs_i,)
                 cog_i = cog[mask,:]  # (n_obs_i, n_cog_features)
-                beta_i = current_beta[idx]
-            
-                #print("breakpoint 6: ", x_obs_i.shape, x_obs_i.dtype,dt_i.shape, dt_i.dtype, cog_i.shape, cog_i.dtype, beta_i)  
-                #print("breakpoint 8: ", current_cog_a.shape)
-                #if X_obs_i.shape[0] != dt_i.shape:
-                #    print(patient_id, X_obs_i.shape, dt_i.shape)
-                    
+                beta_i = current_beta[idx]            
                 beta_i = estimate_beta_for_patient(beta_i=beta_i, X_obs_i=X_obs_i, dt_i=dt_i,
                                                    X_pred=X_pred, t_span=self.t_span,
                                                    cog_i = cog_i, cog_a = current_cog_a, cog_b = current_cog_b,
@@ -194,7 +183,6 @@ class EM(BaseEstimator, TransformerMixin):
                     print(f"jacobian toggle: {jacobian_toggle} due to increase or convergence in LSE at iteration {loop_iter}.")
                 continue
             
-            
             ## update accepted
             best_lse = min(best_lse, lse)
             # TODO: Get idk of best lse
@@ -208,18 +196,17 @@ class EM(BaseEstimator, TransformerMixin):
             
         #final_theta = theta_history[:,-1]
         
-                ## move these later towards the end for a summary:
-        print("initial conditions:")
-        print(f"initial f: {initial_f}")
-        print(f"initial s: {initial_s}")
-        print(f"initial scalar K: {initial_scalar_K}")
-        print(f"initial beta: {initial_beta}")
+        # print("initial conditions:")
+        # print(f"initial f: {initial_f}")
+        # print(f"initial s: {initial_s}")
+        # print(f"initial scalar K: {initial_scalar_K}")
+        # print(f"initial beta: {initial_beta}")
         
-        print("current conditions:")
-        print(f"current f: {current_f}")
-        print(f"current s: {current_s}")
-        print(f"current scalar K: {current_scalar_K}")
-        print(f"current beta: {current_beta}")
+        # print("current conditions:")
+        # print(f"current f: {current_f}")
+        # print(f"current s: {current_s}")
+        # print(f"current scalar K: {current_scalar_K}")
+        # print(f"current beta: {current_beta}")
         
         self.theta_history = theta_history
         self.beta_history = beta_history
