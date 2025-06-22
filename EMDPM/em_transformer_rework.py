@@ -192,7 +192,12 @@ class EM(BaseEstimator, TransformerMixin):
 
             #if self.use_jacobian and lse > best_lse and not jacobian_switched:
             # if self.use_jacobian and best_lse - lse > 1e-3 * best_lse and not jacobian_switched:
-            if best_lse - lse > 1e-3 * best_lse:
+            
+            epsilon = 1e-6
+            relative_tolerance = 1e-3
+            delta = best_lse - lse
+            
+            if delta < epsilon or lse > best_lse * (1 + relative_tolerance):
                 self.use_jacobian = not self.use_jacobian
                 print(f"warning: toggling jacobian: {self.use_jacobian} due to increase or convergence in LSE at iteration {loop_iter}.")
                 #jacobian_switched = True
@@ -236,3 +241,8 @@ class EM(BaseEstimator, TransformerMixin):
         
         
         return self
+    
+    def score(self, X, y=None):
+        return -self.lse_history[-1]
+
+    
