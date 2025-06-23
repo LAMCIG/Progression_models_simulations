@@ -8,6 +8,7 @@ from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
 from .utils import solve_system, initialize_beta
 
+
 class EM(BaseEstimator, TransformerMixin):
     """
     EM algorithm for recovering disease progression model parameters
@@ -22,41 +23,54 @@ class EM(BaseEstimator, TransformerMixin):
                  lambda_f: float = 0.01,
                  lambda_cog: float = 0,
                  lambda_scalar: float = 0.0,
-                 rng: np.random.Generator = None
+                 rng: np.random.Generator = None, 
+                 dt: np.ndarray = None,
+                 ids: np.ndarray = None,
+                 cog: np.ndarray = None,
+                 K: np.ndarray = None,
+                 initial_beta: np.ndarray = None,
+                 save_path: str = None
                  ):
 
-        # [fitter settings]
+        # [model settings]
         self.num_iterations = num_iterations
         self.t_max = t_max
         self.step = step
-        self.rng = np.random.default_rng(75)
         
+        # [patient data] # TODO: ask BG if there's a better way to pass these guys in maybe zipping them?
+        self.ids = ids
+        self.dt = dt
+        self.cog = cog
+        self.K = K
+        if rng is None:
+            self.rng = np.random.default_rng(75)
+        else:
+            self.rng = rng
+
         # [hyperparameters]
-        self.lambda_f = lambda_f # TODO: consider refactoring to like "lasso_penalty" or "lambda_connectiviy"
+        self.lambda_f = lambda_f
         self.lambda_cog = lambda_cog
         self.lambda_scalar = lambda_scalar
         
-        ## [jacobian switching logic]
+        # [jacobian switching logic]
         self.use_jacobian = use_jacobian
         
-    def fit(self,
-            X: np.ndarray,
-            dt: np.ndarray,
-            ids: np.ndarray,
-            cog: np.ndarray,
-            K: np.ndarray,
-            initial_beta: np.ndarray = None,
-            save_path: str = None):
-        """
-        Run the EM loop to estimate theta (ODE params) and beta (patient shifts).
-
-        Parameters
-        ----------
-
-        Returns
-        -------
-        self
-        """
+        # [initial values]
+        self.initial_beta = initial_beta
+        
+        # [saving]
+        self.save_path = save_path
+        
+    def fit(self, X: np.ndarray, y: np.ndarray):
+        import time
+        
+        # 2025.6.22 - will temporarily assign class vars to regular vars, TODO: refactor class vars
+        ids = self.ids
+        dt = self.dt
+        cog = self.cog
+        K = self.K
+        save_path = self.save_path
+        
         rng = self.rng
         self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step)) # I dont know why this is a class variable might be for plotting
         n_biomarkers = np.size(X,1) # rows = observations, columns = biomarkers
@@ -83,9 +97,10 @@ class EM(BaseEstimator, TransformerMixin):
         initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
         
         # beta
-        if initial_beta is None:
+        if self.initial_beta is None:
             initial_beta = initialize_beta(ids=ids, beta_range=(0, self.t_max), rng=rng)
-            
+        else:
+            initial_beta = self.initial_beta
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
@@ -147,6 +162,8 @@ class EM(BaseEstimator, TransformerMixin):
         pbar = tqdm(total=self.num_iterations)
         while loop_iter < self.num_iterations:
             hist_idx = loop_iter + 1
+            
+            start_theta = time.time()
             current_theta = fit_theta(X_obs=X, dt_obs=dt, ids=ids, K=K,
                                              t_span=self.t_span, use_jacobian=self.use_jacobian,
                                              lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
@@ -159,6 +176,9 @@ class EM(BaseEstimator, TransformerMixin):
             X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
             theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
             lse = 0.0
+            end_theta = time.time()
+            
+            print(f"Execution time: {end_theta - start_theta:.4f} seconds")
             
             # TODO: Attempt parallel beta computation
             ### beta comuputaiton
@@ -217,10 +237,6 @@ class EM(BaseEstimator, TransformerMixin):
             pbar.update(1)
             
         final_theta = theta_history[:,-1]
-
-        print("\nSUMMARY:")
-        print("initial theta: ", initial_theta[0:10])
-        print("final theta: ", final_theta[0:10])
         
         self.theta_history = theta_history
         self.beta_history = beta_history
