@@ -16,21 +16,29 @@ class EM(BaseEstimator, TransformerMixin):
     """
 
     def __init__(self, 
+                 # [model parameters]
                  max_iter: int = 50,
-                 t_max: float = 12,
+                 t_max: float = 30,
                  step: float = 0.01,
-                 jac_toggle: bool = False,
+                 K: np.ndarray = None,
+                 rng: np.random.Generator = None,
+                 
+                 # [hyperparameters]
                  lambda_f: float = 0.01,
                  lambda_cog: float = 0,
                  lambda_scalar: float = 0.0,
-                 rng: np.random.Generator = None, 
-                 K: np.ndarray = None,
+                 
+                 # [fit parameters]
+                 jac_toggle: bool = False,
+                 epsilon: float = 1e-2,
+                 relative_tolerance: float = 1e-3,
                  ):
 
         # [model settings]
         self.max_iter = max_iter
         self.t_max = t_max
         self.step = step
+        self.K = K
         
         if rng is None:
             self.rng = np.random.default_rng(75)
@@ -42,10 +50,10 @@ class EM(BaseEstimator, TransformerMixin):
         self.lambda_cog = lambda_cog
         self.lambda_scalar = lambda_scalar
         
-        # [jacobian switching logic]
+        # [fitting params]
         self.jac_toggle = jac_toggle
-        
-        self.K = K
+        self.epsilon = epsilon
+        self.relative_tolerance = relative_tolerance
         
     def fit(self, X: np.ndarray, y: np.ndarray = None):
         import time
@@ -57,7 +65,7 @@ class EM(BaseEstimator, TransformerMixin):
         # K = self.K
         # save_path = self.save_path
         
-        # X_obs = X["X_obs"] # 2025.23.6 - I will refactor X in this function to X_obs later -DS
+        # X_obs = X["X_obs"] # 2025.6.23 - I will refactor X in this function to X_obs later -DS
         # dt = X["dt"]
         # ids = X["ids"]
         # cog = X["cog"]
@@ -235,11 +243,9 @@ class EM(BaseEstimator, TransformerMixin):
             #if self.use_jacobian and lse > best_lse and not jacobian_switched:
             # if self.use_jacobian and best_lse - lse > 1e-3 * best_lse and not jacobian_switched:
             
-            epsilon = 1e-2
-            relative_tolerance = 1e-3
             delta = best_lse - lse
             
-            if (self.jac_toggle == True) and (delta < epsilon):# or lse > best_lse * (1 + relative_tolerance)):
+            if (self.jac_toggle == True) and (delta < self.epsilon):# or lse > best_lse * (1 + self.relative_tolerance)):
                 if jacobian_switched == True: # early convergence detected
                     #print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")
                     lse_history[hist_idx] = lse
@@ -272,71 +278,77 @@ class EM(BaseEstimator, TransformerMixin):
         self.beta_history = beta_history[:, 0:hist_idx+1]
         self.lse_history = lse_history[0:hist_idx+1]
         self.cog_regression_history = cog_regression_history[:, 0:hist_idx+1]
-        #print("fit complete")
+        
+        self.theta = self.theta_history[:, -1]
+        self.cog_a = self.cog_regression_history[:-1,-1]
+        self.cog_b = self.cog_regression_history[-1, -1]
+
+
+        f = self.theta[:n_biomarkers]
+        scalar_K = self.theta[-1]
+        self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
         
         return self
     
-    def cross_val_lse(self, X):
-        cog_a = self.cog_regression_history[:-1, -1]  # shape (n_cog_features,)
-        cog_b = self.cog_regression_history[-1, -1]
-        theta = self.theta_history[:, -1]
-
-        n_biomarkers = (len(theta) - 1) // 2
-
-        f = theta[0:n_biomarkers]
-        s = theta[n_biomarkers:2 * n_biomarkers]
-        scalar_K = theta[-1]
-        x0 = np.zeros_like(f)
-
-        # Use the model's stored K
-        X_model = solve_system(x0, f, self.K, self.t_span, scalar_K)
-
-        total_lse = 0.0
-
-        for patient in X:
-            dt_i = patient["dt"]
-            cog_i = patient["cog"][0]  # use first visit to estimate beta
-            X_obs_i = patient["X_obs"]
-
-            beta_i_guess = cog_a @ cog_i + cog_b
-            beta_hat = estimate_beta_for_patient(
-                beta_i=beta_i_guess,
-                X_obs_i=X_obs_i,
-                dt_i=dt_i,
-                X_pred=X_model,
+    def transform(self, X: list[dict]) -> np.ndarray:
+        """
+        Estimate beta values for a list of patient dicts.
+        """
+        beta_vals = []
+        for p in tqdm(X, desc="Estimating beta values"):
+            # print(p["cog"], self.cog_a.shape)
+            beta_i = estimate_beta_for_patient(
+                beta_i=0.0,
+                X_obs_i=p["X_obs"],
+                dt_i=p["dt"],
+                X_pred=self.X_pred,
                 t_span=self.t_span,
-                cog_i=cog_i,
-                cog_a=cog_a,
-                cog_b=cog_b,
-                theta=theta,
+                cog_i=p["cog"],
+                cog_a=self.cog_a,
+                cog_b=self.cog_b,
+                theta=self.theta,
                 K=self.K,
                 lambda_cog=self.lambda_cog,
                 use_jacobian=self.jac_toggle,
-                t_max=self.t_span[-1]
+                t_max=self.t_max
             )
-            t_ij = dt_i + beta_hat
-
-            x_pred = np.array([
-                np.interp(t_ij, self.t_span, X_model[b_idx])
-                for b_idx in range(X_model.shape[0])
-            ]).T  # shape (n_visits, n_biomarkers)
-
-            total_lse += np.sum((s[None,:]*x_pred - X_obs_i) ** 2)
-
-        return total_lse
+            beta_vals.append(beta_i)
+        return np.array(beta_vals)
 
 
-
-    def score(self, X, y=None):
-#        print("[SCORE] score was called")
-        try:
-            loss = self.cross_val_lse(X)
-            #print(f"[SCORE] LSE: {loss:.4f}")
-            return -loss
-        except Exception as e:
-            #print(f"[SCORE ERROR] {e}")
-            return float("-inf")
+    def score(self, X: dict, y=None) -> float:
+        """
+        Computes timeshifts of validation set using transform,
+        evaluates difference between predicted model and obs
+        """
+        beta_val = self.transform(X)
+        lse = self._compute_val_score(X, beta_val)
+        return -lse
     
+    def _compute_val_score(self, X: list[dict], beta: np.ndarray) -> float:
+        n_biomarkers = X[0]["X_obs"].shape[1]
+        f = self.theta[:n_biomarkers]
+        s = self.theta[n_biomarkers:2 * n_biomarkers]
+        scalar_K = self.theta[-1]
+
+        X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
+
+        lse = 0.0
+        for i, p in enumerate(X):
+            dt_i = p["dt"]
+            X_obs_i = p["X_obs"]
+            beta_i = beta[i]
+            time_points = beta_i + dt_i
+
+            X_interp = np.vstack([
+                np.interp(time_points, self.t_span, X_pred[b]) * s[b]
+                for b in range(n_biomarkers)
+            ]).T
+
+            lse += np.sum((X_obs_i - X_interp) ** 2)
+        return lse
+
+
     from datetime import datetime
 
     def save(self, save_path: str = None):
