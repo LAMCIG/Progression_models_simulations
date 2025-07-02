@@ -1,0 +1,10 @@
+#!/bin/bash
+#PBS -N dummy_test
+#PBS -l walltime=00:01:00
+#PBS -l nodes=1:ppn=1
+#PBS -o output.log
+#PBS -e error.log
+#PBS -V
+
+cd $PBS_O_WORKDIR
+python dummy.py

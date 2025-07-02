@@ -1,0 +1,11 @@
+#!/bin/bash
+#PBS -N em_grid_10biom
+#PBS -l nodes=1:ppn=28
+#PBS -l walltime=08:00:00
+#PBS -j oe
+#PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/em_10biom.log
+
+cd $PBS_O_WORKDIR
+
+~/miniconda3/bin/python run_10biom_grid.py
+

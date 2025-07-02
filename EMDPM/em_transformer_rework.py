@@ -313,6 +313,7 @@ class EM(BaseEstimator, TransformerMixin):
                 t_max=self.t_max
             )
             beta_vals.append(beta_i)
+            self.beta_val = beta_vals
         return np.array(beta_vals)
 
 
