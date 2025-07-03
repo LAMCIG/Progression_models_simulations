@@ -74,6 +74,7 @@ def get_optimal_order(orders: list):
     n_stages = len(orders[0])
     order_map = np.zeros((n_stages,n_stages))
     for i in range(n_stages):
+        # region, freq = np.unique(orders[:][i], return_counts=True)
         region, freq = np.unique(orders[:, i], return_counts=True)
         for r, f in zip(region, freq):
             order_map[r, i] = f
