@@ -21,9 +21,12 @@ def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarra
     np.ndarray
         Simulated biomarker trajectories of shape (n_biomarkers, len(t_span)).
     """
+    eps = 1e-5
+    
     def ode_system(t, x):
-        return (np.eye(K.shape[0]) - np.diag(x)) @ ((scalar_K * K @ x) + f) # TODO: double check position of f wrt parenthesis
-
+        x = np.clip(x, 0, 1 - eps)  # prevent overshoot near upper bound
+        dxdt =  (np.eye(K.shape[0]) - np.diag(x)) @ ((scalar_K * K @ x) + f) # TODO: double check position of f wrt parenthesis
+        return dxdt
     # def jacobian_ode(t, x):
     #     J = (1 - x)[:, None] * K
     #     J[np.diag_indices_from(J)] = -((K @ x) + f)

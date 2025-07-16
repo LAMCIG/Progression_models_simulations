@@ -28,7 +28,7 @@ class EM(BaseEstimator, TransformerMixin):
                  lambda_cog: float = 0,
                  lambda_scalar: float = 0.0,
                  
-                 # [fit parameters]
+                 # [iterative fitting parameters]
                  jac_toggle: bool = False,
                  epsilon: float = 1e-2,
                  relative_tolerance: float = 1e-3,
@@ -90,9 +90,10 @@ class EM(BaseEstimator, TransformerMixin):
 
         X_obs = np.vstack(X_obs_list)
         dt = np.concatenate(dt_list)
-        cog = np.vstack(cog_list)
+        cog = np.hstack(cog_list)
         ids = np.concatenate(ids_list)
 
+        print(X_obs.shape, dt.shape, cog.shape, ids.shape)
         n_patients = len(unique_ids)
 
         if initial_beta_list:
@@ -247,12 +248,12 @@ class EM(BaseEstimator, TransformerMixin):
             
             if (self.jac_toggle == True) and (delta < self.epsilon):# or lse > best_lse * (1 + self.relative_tolerance)):
                 if jacobian_switched == True: # early convergence detected
-                    #print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")
+                    print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")
                     lse_history[hist_idx] = lse
                     break 
                 
                 current_jac = False
-                #print(f"warning: toggling to jac {current_jac}; due to increase or convergence in LSE at iteration {loop_iter}.")
+                print(f"warning: toggling to jac {current_jac}; due to increase or convergence in LSE at iteration {loop_iter}.")
                 jacobian_switched = True
                 continue
             # if best_lse - lse > 1e-3 * best_lse
@@ -296,14 +297,17 @@ class EM(BaseEstimator, TransformerMixin):
         """
         beta_vals = []
         for p in tqdm(X, desc="Estimating beta values"):
-            # print(p["cog"], self.cog_a.shape)
+            cog_i = p["cog"]
+            if cog_i.ndim == 1:
+                cog_i = cog_i.reshape(-1, 1)
+
             beta_i = estimate_beta_for_patient(
                 beta_i=0.0,
                 X_obs_i=p["X_obs"],
                 dt_i=p["dt"],
                 X_pred=self.X_pred,
                 t_span=self.t_span,
-                cog_i=p["cog"],
+                cog_i=cog_i,
                 cog_a=self.cog_a,
                 cog_b=self.cog_b,
                 theta=self.theta,
@@ -313,7 +317,7 @@ class EM(BaseEstimator, TransformerMixin):
                 t_max=self.t_max
             )
             beta_vals.append(beta_i)
-            self.beta_val = beta_vals
+        self.beta_val = beta_vals
         return np.array(beta_vals)
 
 
