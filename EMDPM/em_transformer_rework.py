@@ -32,6 +32,9 @@ class EM(BaseEstimator, TransformerMixin):
                  jac_toggle: bool = False,
                  epsilon: float = 1e-2,
                  relative_tolerance: float = 1e-3,
+                 
+                 # [misc options]
+                 verbose = 1,
                  ):
 
         # [model settings]
@@ -54,6 +57,9 @@ class EM(BaseEstimator, TransformerMixin):
         self.jac_toggle = jac_toggle
         self.epsilon = epsilon
         self.relative_tolerance = relative_tolerance
+        
+        # [misc options]
+        self.verbose = verbose
         
     def fit(self, X: np.ndarray, y: np.ndarray = None):
         import time
@@ -93,7 +99,7 @@ class EM(BaseEstimator, TransformerMixin):
         cog = np.hstack(cog_list)
         ids = np.concatenate(ids_list)
 
-        print(X_obs.shape, dt.shape, cog.shape, ids.shape)
+        # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
         n_patients = len(unique_ids)
 
         if initial_beta_list:
@@ -190,11 +196,14 @@ class EM(BaseEstimator, TransformerMixin):
         ### MAIN LOOP ###
         loop_iter = 0
         
-        pbar = tqdm(total=self.max_iter)
+        if self.verbose >= 1:
+            pbar = tqdm(total=self.max_iter)
+        else:
+            pbar = range(self.max_iter)
+            
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
             
-            start_theta = time.time()
             current_theta = fit_theta(X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
                                              t_span=self.t_span, use_jacobian=current_jac,
                                              lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
@@ -207,7 +216,6 @@ class EM(BaseEstimator, TransformerMixin):
             X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
             theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
             lse = 0.0
-            end_theta = time.time()
             
             #print(f"Execution time: {end_theta - start_theta:.4f} seconds")
             
@@ -248,12 +256,16 @@ class EM(BaseEstimator, TransformerMixin):
             
             if (self.jac_toggle == True) and (delta < self.epsilon):# or lse > best_lse * (1 + self.relative_tolerance)):
                 if jacobian_switched == True: # early convergence detected
-                    print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")
+                    if self.verbose >= 2:
+                        print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")
+                    current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta, ids)
+                    cog_regression_history[:, hist_idx] = np.concatenate([current_cog_a, [current_cog_b]])
                     lse_history[hist_idx] = lse
                     break 
                 
                 current_jac = False
-                print(f"warning: toggling to jac {current_jac}; due to increase or convergence in LSE at iteration {loop_iter}.")
+                if self.verbose >= 2:
+                    print(f"warning: toggling to jac {current_jac}; due to increase or convergence in LSE at iteration {loop_iter}.")
                 jacobian_switched = True
                 continue
             # if best_lse - lse > 1e-3 * best_lse
@@ -265,7 +277,7 @@ class EM(BaseEstimator, TransformerMixin):
                 current_jac = True
             
             best_lse = min(best_lse, lse)
-            # TODO: Get idk of best lse
+            # TODO: Get idx of best lse
             lse_history[hist_idx] = lse
             
             current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta, ids)
