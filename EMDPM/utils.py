@@ -21,10 +21,10 @@ def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarra
     np.ndarray
         Simulated biomarker trajectories of shape (n_biomarkers, len(t_span)).
     """
-    eps = 1e-5
+    eps = 1e-2
     
     def ode_system(t, x):
-        x = np.clip(x, 0, 1 - eps)  # prevent overshoot near upper bound
+        x = np.clip(x, 0.0 + eps, 1.0 - eps)  # prevent overshoot near upper bound
         dxdt =  (np.eye(K.shape[0]) - np.diag(x)) @ ((scalar_K * K @ x) + f) # TODO: double check position of f wrt parenthesis
         return dxdt
     # def jacobian_ode(t, x):
@@ -50,10 +50,14 @@ def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarra
         x0,
         t_eval=t_span,
         method="LSODA",
-        jac=jacobian_ode
+        jac=jacobian_ode,
+        rtol=1e-8,#1e-6,
+        atol=1e-10,#1e-8
+        # reminder: LSODA ignores min and max step
     )
 
-    return sol.y
+
+    return np.clip(sol.y, 0.0 + eps, 1.0 - eps)
 
 def initialize_beta(ids: np.ndarray, beta_range: tuple = (0, 12), rng: np.random.Generator = None) -> np.ndarray:
     """
