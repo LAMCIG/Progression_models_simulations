@@ -16,25 +16,45 @@ def plot_biomarker_trajectories(biom_trajectories: np.ndarray, t_span: np.ndarra
     plt.legend()
     plt.show()
 
+import matplotlib.pyplot as plt
+import matplotlib
+
 def plot_true_observations(df: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, patient_idx=None) -> None:
     """
-    Overlays observed biomarker values from a few patients on the true model trajectories.
+    Overlays observed biomarker values from selected patients on the true model trajectories.
+    Each patient gets a unique color and marker.
     """
     if patient_idx is None:
         patient_idx = [0, 1, 2, 3, 4]
+
     n_biomarkers = x_true.shape[0]
-    plt.figure(figsize=(10, 4))
+    colors = plt.get_cmap("tab10").colors  # ehhh should be more than 10
+    markers = ['o', 's', 'D', '^', 'v', 'P', 'X', '*', '<', '>'] # incase I want more
+
+    fig, ax = plt.subplots(figsize=(10, 4))
+
+    # Plot true curves (gray background)
     for i in range(n_biomarkers):
-        plt.plot(t, x_true[i], color="k", alpha=0.5)
-    patient_colors = plt.cm.rainbow(np.linspace(0, 1, len(patient_idx)))
+        ax.plot(t, x_true[i], color="k", alpha=0.5, linewidth=1)
+
+    # Plot observations
     for color_index, patient in enumerate(patient_idx):
         patient_data = df[df["patient_id"] == patient]
         t_ij = patient_data["beta_true"] + patient_data["dt"]
+        marker = markers[color_index % len(markers)]
+        color = colors[color_index % len(colors)]
+
         for i in range(n_biomarkers):
-            plt.scatter(t_ij, patient_data[f"biomarker_{i+1}"], color=patient_colors[color_index], label=f"Patient {patient}" if i == 0 else None)
-    plt.title("patient obs at true time")
-    plt.legend()
+            y = patient_data[f"biomarker_{i+1}"]
+            ax.scatter(t_ij, y, color=color, marker=marker, s=30, label=f"Patient {patient}" if i == 0 else None)
+
+    ax.set_title("Patient observations at true timepoints on groundtruth biomarker trajectories")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Biomarker Value")
+    ax.legend(ncol=len(patient_idx), fontsize=9)
+    plt.tight_layout()
     plt.show()
+
 
 def plot_initial_beta_guess(df: pd.DataFrame, beta_iter: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, patient_idx=None) -> None:
     """
@@ -45,7 +65,7 @@ def plot_initial_beta_guess(df: pd.DataFrame, beta_iter: pd.DataFrame, t: np.nda
     n_biomarkers = x_true.shape[0]
     plt.figure(figsize=(10, 4))
     for i in range(n_biomarkers):
-        plt.plot(t, x_true[i], color="k", alpha=0.2)
+        plt.plot(t, x_true[i], color="k", alpha=0.3)
     patient_colors = plt.cm.rainbow(np.linspace(0, 1, len(patient_idx)))
     for color_index, patient in enumerate(patient_idx):
         beta_guess = beta_iter.loc[beta_iter["patient_id"] == patient, "0"].values[0]
@@ -56,17 +76,33 @@ def plot_initial_beta_guess(df: pd.DataFrame, beta_iter: pd.DataFrame, t: np.nda
     plt.legend()
     plt.show()
 
-def plot_theta_fit_comparison(t: np.ndarray, t_span: np.ndarray, x_true: np.ndarray, x_init: np.ndarray, x_final: np.ndarray, n_biomarkers: int) -> None:
+def plot_theta_fit_comparison(t: np.ndarray, t_span: np.ndarray, x_true: np.ndarray,
+                              x_init: np.ndarray, x_final: np.ndarray,
+                              n_biomarkers: int) -> None:
     """
-    Plots the initial, fitted, and true biomarker curves.
+    Plots the fitted vs. true biomarker trajectories for comparison.
     """
-    colors = plt.cm.rainbow(np.linspace(0, 1, n_biomarkers))
+    if n_biomarkers == 10:
+        cmap = plt.get_cmap("tab10")
+    elif n_biomarkers == 20:
+        cmap = plt.get_cmap("tab20")
+    else:
+        cmap = plt.get_cmap("viridis") # ill comeup with a better one later
+
     plt.figure(figsize=(10, 4))
     for i in range(n_biomarkers):
-        plt.plot(t, x_true[i], linestyle="-", color=colors[i], alpha=0.6)
-        plt.plot(t_span, x_final[i], linestyle="--", color=colors[i], alpha=0.9)
-        plt.plot(t_span, x_init[i], linestyle=":", color=colors[i], alpha=0.2)
-    plt.title("intial vs. predicted vs. true curve")
+        color = cmap(i % cmap.N)
+        plt.plot(t, x_true[i], linestyle="-", color=color, alpha=0.6,
+                 label=f"Biomarker {i+1}" if n_biomarkers <= 10 else None)
+        plt.plot(t_span, x_final[i], linestyle="--", color=color, alpha=0.9)
+        #plt.plot(t_span, x_init[i], linestyle=":", color=color, alpha=0.2)
+    # if n_biomarkers <= 10:
+    #     plt.legend(ncol=2, fontsize="small", loc="upper left")
+
+    plt.title("Predicted vs. true trajectories")
+    plt.xlabel("Time")
+    plt.ylabel("Biomarker Value")
+    #plt.tight_layout()
     plt.show()
 
 def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_iterations: int,
@@ -99,9 +135,9 @@ def plot_theta_error_history(theta_iter: pd.DataFrame, n_biomarkers: int, num_it
         scalar_K_error_history.append(k_err)
         
     plt.figure(figsize=(10, 4))
-    plt.plot(f_error_history, label="f error")
-    plt.plot(s_error_history, label="s error")
-    plt.plot(scalar_K_error_history, label="scalar rrror")
+    plt.plot(f_error_history, label="forcing error")
+    plt.plot(s_error_history, label="supremum error")
+    plt.plot(scalar_K_error_history, label="scalar error")
     plt.xlabel("iteration")
     plt.ylabel("error")
     plt.legend()

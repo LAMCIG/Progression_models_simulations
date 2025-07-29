@@ -254,7 +254,7 @@ class EM(BaseEstimator, TransformerMixin):
             
             delta = best_lse - lse
             
-            if (self.jac_toggle == True) and (delta < self.epsilon):# or lse > best_lse * (1 + self.relative_tolerance)):
+            if (self.jac_toggle == True) and (delta < self.epsilon) and loop_iter > 3:# or lse > best_lse * (1 + self.relative_tolerance)):
                 if jacobian_switched == True: # early convergence detected
                     if self.verbose >= 2:
                         print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")

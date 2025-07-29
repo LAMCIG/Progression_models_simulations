@@ -53,7 +53,7 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
     print(f"a = {cog_a}, b = {cog_b}")
 
     for patient_id in range(n_patients):
-        visit_interval = rng.gamma(shape=2, scale=0.5)
+        visit_interval = rng.uniform(1,2)
         first_visit = rng.uniform(0, t_max - (n_patient_obs * visit_interval))
 
         t_obs = np.array([first_visit + i * visit_interval for i in range(n_patient_obs)])
@@ -64,7 +64,7 @@ def generate_synthetic_data(n_biomarkers: int = 10, t_max: float = 12, noise_lev
         x_obs = x_true[:, np.searchsorted(t, t_obs)] + rng.normal(0, noise_level, (n_biomarkers, n_patient_obs))
         x_obs = x_obs.clip(0, 1)
         
-        cognitive_scores = cog_a*(t_obs + rng.normal(0, 1, size=n_patient_obs)) + cog_b #+ cog_noise
+        cognitive_scores = cog_a*(t_obs + rng.normal(0, 1, size=n_patient_obs)) + cog_b # + cog_noise
         beta_true_dict[patient_id] = first_visit
         
         for i in range(n_patient_obs):
