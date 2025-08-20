@@ -16,9 +16,6 @@ def plot_biomarker_trajectories(biom_trajectories: np.ndarray, t_span: np.ndarra
     plt.legend()
     plt.show()
 
-import matplotlib.pyplot as plt
-import matplotlib
-
 def plot_true_observations(df: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, patient_idx=None) -> None:
     """
     Overlays observed biomarker values from selected patients on the true model trajectories.
@@ -48,12 +45,50 @@ def plot_true_observations(df: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, 
             y = patient_data[f"biomarker_{i+1}"]
             ax.scatter(t_ij, y, color=color, marker=marker, s=30, label=f"Patient {patient}" if i == 0 else None)
 
-    ax.set_title("Patient observations at true timepoints on groundtruth biomarker trajectories")
+    ax.set_title("Synthetic patient observations timepoints on groundtruth biomarker trajectories")
     ax.set_xlabel("Time")
     ax.set_ylabel("Biomarker Value")
     ax.legend(ncol=len(patient_idx), fontsize=9)
-    plt.tight_layout()
+    # plt.tight_layout()
     plt.show()
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
+def plot_beta_overlay(df: pd.DataFrame, beta_iter: pd.DataFrame, theta_iter: pd.DataFrame, t_span: np.ndarray,
+                      n_biomarkers: int, x_init: np.ndarray, x_final: np.ndarray, iteration: int = -1,
+                      patient_range=(0, 5)) -> None:
+    """
+    plots vertical lines for initial, predicted, and true beta (onset) per patient,
+    along with ground truth biomarker trajectories.
+    """
+    patients = df["patient_id"].unique()[patient_range[0]:patient_range[1]]
+    tab10 = plt.get_cmap("tab10")
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    
+    # plot ground truth biomarker trajectories
+    for i in range(n_biomarkers):
+        ax.plot(t_span, x_final[i], color="k", alpha=0.2)
+
+    for idx, patient_id in enumerate(patients):
+        color = tab10(idx % 10)
+        beta_true = df[df["patient_id"] == patient_id]["beta_true"].iloc[0]
+        beta_estimated = beta_iter.loc[beta_iter["patient_id"] == patient_id, str(iteration)].values[0]
+        beta_init = beta_iter.loc[beta_iter["patient_id"] == patient_id, "0"].values[0]
+
+        ax.axvline(x=beta_true, color=color, linestyle="-", label=f"true (P{patient_id})")
+        ax.axvline(x=beta_estimated, color=color, linestyle="--", label=f"est (P{patient_id})")
+        # ax.axvline(x=beta_init, color=color, linestyle=":", alpha=0.3, label=f"init (P{patient_id})")
+    
+    # reduce legend duplicates by using handles/labels dict
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys())
+    ax.set_title("Initial vs. Predicted vs. True Onset (Beta) per Patient")
+    plt.show()
+
 
 
 def plot_initial_beta_guess(df: pd.DataFrame, beta_iter: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, patient_idx=None) -> None:

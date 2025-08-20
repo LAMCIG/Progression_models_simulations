@@ -28,6 +28,11 @@ class EM(BaseEstimator, TransformerMixin):
                  lambda_cog: float = 0,
                  lambda_scalar: float = 0.0,
                  
+                 # [initial guesses]
+                 initial_f: np.ndarray = None, 
+                 # initial_s
+                 # initial_s_K
+                 
                  # [iterative fitting parameters]
                  jac_toggle: bool = False,
                  epsilon: float = 1e-2,
@@ -52,6 +57,9 @@ class EM(BaseEstimator, TransformerMixin):
         self.lambda_f = lambda_f
         self.lambda_cog = lambda_cog
         self.lambda_scalar = lambda_scalar
+        
+        # [initial guesses]
+        self.initial_f = initial_f
         
         # [fitting params]
         self.jac_toggle = jac_toggle
@@ -132,7 +140,13 @@ class EM(BaseEstimator, TransformerMixin):
         ## initialize guesses
         # theta
         initial_x0 = np.zeros(n_biomarkers)
-        initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
+        
+        # forcing term, random initialization if None
+        if self.lambda_f == None:
+            initial_f = self.lambda_f
+        else:
+            initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
+            
         initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
         # initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
         initial_scalar_K = np.max(X_obs)
