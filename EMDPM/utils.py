@@ -74,3 +74,24 @@ def initialize_beta(ids: np.ndarray, beta_range: tuple = (0, 12), rng: np.random
     initial_beta = rng.uniform(beta_range[0], beta_range[1], size=len(patient_ids))
     
     return initial_beta
+
+def initialize_f_eigen(K: np.ndarray, jitter_strength: float = 0.05, n_eigs: int = 1, rng: np.random.RandomState = np.random.RandomState(75)) -> np.ndarray:
+    """
+    Initialize forcing term f using top eigenvectors of the connectivity matrix.
+    """
+    w, V = np.linalg.eigh(K)  # returns (eigenvalues, eigenvectors)
+    order = np.argsort(np.abs(w))[::-1]   # sort by eigenvalue, descending?
+    V = V[:, order]
+
+    # Take top n_eigs
+    f_list = []
+    for i in range(min(n_eigs, V.shape[1])):
+        f = np.abs(V[:, i])  # ensure nonnegative TODO: ask BG if I should square it instead
+        f /= f.mean()        # scale so mean ~1
+        f *= 0.05           
+        if rng is not None:
+            f += rng.normal(0, jitter_strength, size=f.shape)  # apply jitter
+            f = np.clip(f, 0.0, None)
+        f_list.append(f)
+
+    return np.vstack(f_list)

@@ -1,0 +1,29 @@
+/home/dsemchin/miniconda3/lib/python3.12/site-packages/statsmodels/regression/mixed_linear_model.py:1634: UserWarning: Random effects covariance is singular
+  warnings.warn(msg)
+/home/dsemchin/miniconda3/lib/python3.12/site-packages/statsmodels/regression/mixed_linear_model.py:2237: ConvergenceWarning: The MLE may be on the boundary of the parameter space.
+  warnings.warn(msg, ConvergenceWarning)
+/home/dsemchin/miniconda3/lib/python3.12/site-packages/statsmodels/regression/mixed_linear_model.py:2261: ConvergenceWarning: The Hessian matrix at the estimated parameter values is not positive definite.
+  warnings.warn(msg, ConvergenceWarning)
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+count    504.000000
+mean       0.002763
+std        0.012933
+min       -0.075794
+25%       -0.003324
+50%        0.003218
+75%        0.010403
+max        0.041529
+Name: avg_slope, dtype: float64
+  0%|          | 0/30 [00:00<?, ?it/s]  3%|3         | 1/30 [00:41<20:17, 41.99s/it]  7%|6         | 2/30 [01:06<14:50, 31.80s/it] 10%|#         | 3/30 [01:22<11:06, 24.67s/it] 13%|#3        | 4/30 [01:36<08:48, 20.32s/it] 17%|#6        | 5/30 [01:42<06:21, 15.28s/it] 20%|##        | 6/30 [01:46<04:35, 11.46s/it] 23%|##3       | 7/30 [04:52<26:13, 68.40s/it] 27%|##6       | 8/30 [04:59<17:57, 49.00s/it] 27%|##6       | 8/30 [06:05<16:45, 45.73s/it]
+Estimating beta values:   0%|          | 0/30 [00:00<?, ?it/s]Estimating beta values:  30%|###       | 9/30 [00:00<00:00, 88.72it/s]Estimating beta values:  60%|######    | 18/30 [00:00<00:00, 73.03it/s]Estimating beta values:  90%|######### | 27/30 [00:00<00:00, 75.33it/s]Estimating beta values: 100%|##########| 30/30 [00:00<00:00, 70.80it/s]
+Saved: /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/f_init_candidate_4.npz

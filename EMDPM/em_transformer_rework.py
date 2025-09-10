@@ -104,7 +104,7 @@ class EM(BaseEstimator, TransformerMixin):
 
         X_obs = np.vstack(X_obs_list)
         dt = np.concatenate(dt_list)
-        cog = np.hstack(cog_list)
+        cog = np.vstack(cog_list)
         ids = np.concatenate(ids_list)
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
@@ -142,8 +142,8 @@ class EM(BaseEstimator, TransformerMixin):
         initial_x0 = np.zeros(n_biomarkers)
         
         # forcing term, random initialization if None
-        if self.lambda_f == None:
-            initial_f = self.lambda_f
+        if self.initial_f is not None:
+            initial_f = self.initial_f
         else:
             initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
             

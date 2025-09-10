@@ -1,6 +1,11 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LinearRegression
+import math
+import matplotlib.cm as cm
+import matplotlib.colors as colors
+import seaborn as sns
 
 # TODO: add general params for all plots
 
@@ -243,3 +248,149 @@ def plot_cog_regression_history(cog_history: np.ndarray, labels: list):
     plt.show()
 
 
+
+def plot_all_patient_regression_lines_grid_nhy(X, dt, ids, beta, t_span, nhy, model=None,
+                                               biomarker_indices=None, biomarker_labels=None,
+                                               max_lines=500, t_max=40):
+    """
+    Plot regression lines per patient for each selected biomarker on a grid of subplots.
+    Each line is color-coded by the patient's mean NHY score.
+    """
+    if biomarker_indices is None:
+        biomarker_indices = list(range(X.shape[1]))
+
+    unique_ids = np.unique(ids)
+    pid_to_index = {pid: idx for idx, pid in enumerate(unique_ids)}
+
+    # compute mean NHY score per patient
+    mean_nhy = {}
+    for pid in unique_ids:
+        nhy_i = nhy[ids == pid]
+        mean_nhy[pid] = np.mean(nhy_i) if len(nhy_i) > 0 else np.nan
+
+    # colormap setup
+    cmap = cm.plasma  # viridis # inferno
+    nhy_vals = np.array(list(mean_nhy.values()))
+    norm = colors.Normalize(vmin=np.nanmin(nhy_vals), vmax=np.nanmax(nhy_vals))
+
+    n_plots = len(biomarker_indices)
+    n_cols = 5
+    n_rows = 2
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows), squeeze=True)
+    axes = axes.flatten()
+
+    for plot_idx, j in enumerate(biomarker_indices):
+        ax = axes[plot_idx]
+        title = biomarker_labels[j] if biomarker_labels else f"biomarker {j}"
+        ax.set_title(f"{title}")
+        
+        line_count = 0
+        for pid in unique_ids:
+            if line_count >= max_lines:
+                break
+            mask = (ids == pid)
+            if np.sum(mask) < 2:
+                continue
+
+            X_i = X[mask, j]
+            dt_i = dt[mask]
+            beta_i = beta[pid_to_index[pid]]
+            t_ij = dt_i + beta_i
+
+            nhy_mean = mean_nhy[pid]
+            if np.isnan(nhy_mean):
+                continue
+            line_color = cmap(norm(nhy_mean))
+
+            model_i = LinearRegression().fit(t_ij.reshape(-1, 1), X_i)
+            t_fit = np.linspace(t_ij.min(), t_ij.max(), 20)
+            x_fit = model_i.predict(t_fit.reshape(-1, 1))
+
+            ax.plot(t_fit, x_fit, color=line_color, alpha=0.8, linewidth=1)
+            line_count += 1
+
+        # plot model-predicted trajectory
+        if model is not None:
+            ax.plot(t_span, model[j], color='black', linewidth=2, label="Model")
+            ax.legend()
+            
+        # determine subplot grid position
+        row_idx = plot_idx // n_cols
+        col_idx = plot_idx % n_cols
+
+        # only show x-labels on bottom row
+        if row_idx == n_rows - 1:
+            ax.set_xlabel("time (y)")
+        else:
+            ax.set_xlabel("")
+            ax.tick_params(labelbottom=False)
+
+        # only show y-labels on leftmost column
+        if col_idx == 0:
+            ax.set_ylabel("biomarker value")
+        else:
+            ax.set_ylabel("")
+            ax.tick_params(labelleft=False)
+
+        ax.set_ylim(0, 1)
+        ax.grid(True)
+        ax.set_xlim(0, t_max)
+
+    # remove unused axes
+    for k in range(n_plots, len(axes)):
+        fig.delaxes(axes[k])
+
+    # Add colorbar for NHY scale
+    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.subplots_adjust(right=0.88)  # make space for colorbar on right
+    cbar_ax = fig.add_axes([1.01, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+    cbar = fig.colorbar(sm, cax=cbar_ax)
+    cbar.set_label("Mean HY Score")
+    
+    plt.tight_layout()
+    plt.show()
+
+def plot_violin_nhy_vs_beta(ids, dt, nhy, beta):
+    unique_ids = np.unique(ids)
+    pair = []
+
+    pid_to_beta = {pid: beta[i] for i, pid in enumerate(unique_ids)}
+
+    for pid in unique_ids:
+        mask = (ids == pid)
+        dt_i = dt[mask]
+        nhy_i = nhy[mask]
+        idx_min_dt = np.argmin(dt_i)
+        nhy_first = nhy_i[idx_min_dt]
+        beta_i = pid_to_beta[pid]
+
+        pair.append({"NHY": nhy_first, "beta": beta_i})
+
+    df = pd.DataFrame(pair)
+
+    plt.figure(figsize=(8, 6))
+    sns.violinplot(data=df, x="NHY", y="beta", palette="plasma", inner="box")
+    plt.title("initial HY vs. beta")
+    plt.xlabel("initial HY")
+    plt.ylabel("beta")
+    plt.show()
+    
+def plot_violin_nhy_vs_tij(dt, ids, beta, nhy):
+    unique_ids = np.unique(ids)
+    pid_to_index = {pid: idx for idx, pid in enumerate(unique_ids)}
+    t_ij = np.array([dt_i + beta[pid_to_index[pid]] for dt_i, pid in zip(dt, ids)])
+
+    df = pd.DataFrame({
+        "t_ij": t_ij,
+        "NHY": nhy
+    })
+
+    plt.figure(figsize=(8, 6))
+    sns.violinplot(data=df, x="NHY", y="t_ij", palette="plasma", inner="box")
+    plt.xlabel("HY stage")
+    plt.ylabel("t_ij")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()

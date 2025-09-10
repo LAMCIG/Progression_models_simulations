@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -N em_68biom_grid
+#PBS -l nodes=1:ppn=28
+#PBS -l walltime=24:00:00
+#PBS -l mem=64gb
+#PBS -j oe
+#PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_logs/
+#PBS -m abe
+#PBS -t 0-4
+
+cd $PBS_O_WORKDIR
+source ~/miniconda3/etc/profile.d/conda.sh
+python /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/run_68biom_f_init_eigen_beta_glm.py \
+  --candidate $PBS_ARRAYID
