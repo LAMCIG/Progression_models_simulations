@@ -86,12 +86,31 @@ def initialize_f_eigen(K: np.ndarray, jitter_strength: float = 0.05, n_eigs: int
     # Take top n_eigs
     f_list = []
     for i in range(min(n_eigs, V.shape[1])):
-        f = np.abs(V[:, i])  # ensure nonnegative TODO: ask BG if I should square it instead
-        f /= f.mean()        # scale so mean ~1
-        f *= 0.05           
+        f = np.abs(V[:, i])
+        # f /= f.mean()        # scale so mean ~1
+        # f *= 0.05           
         if rng is not None:
             f += rng.normal(0, jitter_strength, size=f.shape)  # apply jitter
             f = np.clip(f, 0.0, None)
         f_list.append(f)
 
     return np.vstack(f_list)
+
+def set_diagonal_K(K: np.ndarray, s: float = 1.0, k: float = 0.05): # TODO: ask BG if K should be zeroed beforehand?
+    """
+    Params:
+    s: global strength of connections? scales everything
+    k: 
+    
+    """
+    K = np.array(K, dtype=float, copy=True)
+    if K.ndim != 2 or K.shape[0] != K.shape[1]:
+        raise ValueError(f"K needs to be a square matrix, not {K.shape}")
+    
+    n = K.shape[0]
+    I = np.eye(n)
+    
+    K_diag = s * K + k * I
+    return K_diag
+    # then return K with a diag
+    

@@ -1,12 +1,12 @@
 #!/bin/bash
 #PBS -N em_68biom_grid
-#PBS -l nodes=1:ppn=28
+#PBS -l nodes=1:ppn=4
 #PBS -l walltime=24:00:00
-#PBS -l mem=64gb
+#PBS -l mem=4gb
 #PBS -j oe
 #PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_logs/
 #PBS -m abe
-#PBS -t 0-4
+#PBS -t 0-19%20
 
 cd $PBS_O_WORKDIR
 source ~/miniconda3/etc/profile.d/conda.sh
