@@ -70,8 +70,6 @@ class EM(BaseEstimator, TransformerMixin):
         self.verbose = verbose
         
     def fit(self, X: np.ndarray, y: np.ndarray = None):
-        import time
-        
         # 2025.6.22 - will temporarily assign class vars to regular vars, TODO: refactor class vars
         # ids = self.ids
         # dt = self.dt
@@ -104,7 +102,7 @@ class EM(BaseEstimator, TransformerMixin):
 
         X_obs = np.vstack(X_obs_list)
         dt = np.concatenate(dt_list)
-        cog = np.vstack(cog_list)
+        cog = np.hstack(cog_list)
         ids = np.concatenate(ids_list)
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
@@ -155,9 +153,6 @@ class EM(BaseEstimator, TransformerMixin):
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
-        
-        #initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
-        #initial_cog_b = float(rng.uniform(0, 10)) # bias term
         
         ## move these later towards the end for a summary:
         # print("initial conditions:")

@@ -18,29 +18,50 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     tuple
         Residual sum of squares and gradient with respect to beta_i.
     """
-    n_biomarkers = X_pred.shape[0]         # int
-    s = theta[n_biomarkers:2*n_biomarkers] # (n_biomarkers)
+    # n_biomarkers = X_pred.shape[0]         # int
+    # s = theta[n_biomarkers:2*n_biomarkers] # (n_biomarkers)
     
+    # t_pred_i = dt_i + beta_i
+    # #print("t_pred_i", t_pred_i.shape, "dt_i", dt_i.shape)
+    
+    # X_interp_i = np.array([
+    #     np.interp(t_pred_i, t_span, s[b] * X_pred[b]) # applying supremum
+    #     for b in range(X_pred.shape[0])
+    # ])
+    
+    # X_obs_i_T = X_obs_i.T  # now (n_biomarkers, n_obs_i)
+    
+    # #if X_obs_i_T.shape[0] != X_interp_i.shape[0]:
+    # #    print("X_obs_i", X_obs_i_T.shape, "X_interp_i", X_interp_i.shape)
+    # residuals = X_obs_i_T - X_interp_i
+    
+    # loss = np.sum(residuals ** 2)
+
+    # cog_pred = cog_i @ cog_a + cog_b  # shape (n_visits_i,)
+    # cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
+
+    # return loss + cog_prior
+    
+    n_biomarkers = X_pred.shape[0]
+    s = theta[n_biomarkers:2*n_biomarkers]  # (n_biomarkers,)
+
+    # times for this patient
     t_pred_i = dt_i + beta_i
-    #print("t_pred_i", t_pred_i.shape, "dt_i", dt_i.shape)
-    
-    X_interp_i = np.array([
-        np.interp(t_pred_i, t_span, s[b] * X_pred[b]) # applying supremum
-        for b in range(X_pred.shape[0])
-    ])
-    
-    X_obs_i_T = X_obs_i.T  # now (n_biomarkers, n_obs_i)
-    
-    #if X_obs_i_T.shape[0] != X_interp_i.shape[0]:
-    #    print("X_obs_i", X_obs_i_T.shape, "X_interp_i", X_interp_i.shape)
-    residuals = X_obs_i_T - X_interp_i
-    
-    loss = np.sum(residuals ** 2)
+    # clip to avoid extrap/NaNs
+    t_pred_i = np.clip(t_pred_i, t_span[0], t_span[-1])
 
-    cog_pred = cog_i @ cog_a + cog_b  # shape (n_visits_i,)
-    cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
+    # interpolate UNscaled x, then scale by s for prediction
+    x_unscaled_i = np.vstack([np.interp(t_pred_i, t_span, X_pred[b]) for b in range(n_biomarkers)])
+    x_pred_i = (s[:, None] * x_unscaled_i)  # (n_biomarkers, n_visits_i)
 
-    return loss + cog_prior
+    residuals = X_obs_i.T - x_pred_i
+    recon_loss = np.sum(residuals**2)
+
+    # cognitive prior
+    cog_pred = cog_i @ cog_a + cog_b                  # (n_visits_i,)
+    cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred)**2)
+
+    return recon_loss + cog_prior
     
     
 def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
@@ -68,31 +89,57 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     scalar_K = theta[-1]                   # float
 
     t_pred_i = dt_i + beta_i               # (n_visits_i,)
-
-    X_interp_i = np.array([
-        np.interp(t_pred_i, t_span, s[b] * X_pred[b])
-        for b in range(X_pred.shape[0])
-    ])
-
-    X_obs_i_T = X_obs_i.T                  # (n_biomarkers, n_visits_i)
-    residuals = X_obs_i_T - X_interp_i     
-
-    # dx/dt = (I - diag(x)) @ (scalar_K K x + f)
+    t_pred_i = np.clip(t_pred_i, t_span[0], t_span[-1])
     
-    dxdt_interp_i = np.zeros_like(X_interp_i)
-    for j in range(X_interp_i.shape[1]):
-        x_t = X_interp_i[:, j]
-        dxdt_interp_i[:, j] = (np.eye(n_biomarkers) - np.diag(x_t)) @ ((scalar_K * K) @ x_t + f)
-    dxdt_interp_i *= s[:, None]
-    grad_reconstruction = -2 * np.sum(residuals * dxdt_interp_i, axis=(0, 1))
-    # print("cog params:", cog_i.shape, cog_a.shape, np.size(cog_b))
-    cog_pred = cog_i @ cog_a + cog_b
-    cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
-    grad_cog = 2 * lambda_cog * np.sum(t_pred_i - cog_pred)
+    # X_interp_i = np.array([
+    #     np.interp(t_pred_i, t_span, s[b] * X_pred[b])
+    #     for b in range(X_pred.shape[0])
+    # ])
+    
+    #9/14/2025 - removing scaling from interp
+    
+    x_unscaled_i = np.vstack([np.interp(t_pred_i, t_span, X_pred[b]) for b in range(n_biomarkers)])  # (n, n_vis)
+    x_pred_i = s[:, None] * x_unscaled_i
+    residuals = X_obs_i.T - x_pred_i
+    
+    Kx = K @ x_unscaled_i                               # (n, n_vis)
+    rhs = scalar_K * Kx + f[:, None]                    # (n, n_vis)
+    xdot = (1.0 - x_unscaled_i) * rhs                   # (n, n_vis)
 
-    loss = np.sum(residuals ** 2) + cog_prior
-    grad = grad_reconstruction + grad_cog
+    # 4) d_x_pred/d_beta
+    dxbeta = s[:, None] * xdot
+
+    recon_loss = np.sum(residuals**2)
+    grad_recon = -2.0 * np.sum(residuals * dxbeta)      # scalar
+
+    cog_pred = cog_i @ cog_a + cog_b                    # (n_vis,)
+    cog_err = (t_pred_i - cog_pred)                     # (n_vis,)
+    cog_prior = lambda_cog * np.sum(cog_err**2)
+    grad_cog = 2.0 * lambda_cog * np.sum(cog_err)       # d/dbeta of sum_j (beta + dt - pred)^2
+
+    loss = recon_loss + cog_prior
+    grad = grad_recon + grad_cog
     return loss, grad
+
+    # X_obs_i_T = X_obs_i.T                  # (n_biomarkers, n_visits_i)
+    # residuals = X_obs_i_T - X_interp_i     
+
+    # # dx/dt = (I - diag(x)) @ (scalar_K K x + f)
+    
+    # dxdt_interp_i = np.zeros_like(X_interp_i)
+    # for j in range(X_interp_i.shape[1]):
+    #     x_t = X_interp_i[:, j]
+    #     dxdt_interp_i[:, j] = (np.eye(n_biomarkers) - np.diag(x_t)) @ ((scalar_K * K) @ x_t + f)
+    # dxdt_interp_i *= s[:, None]
+    # grad_reconstruction = -2 * np.sum(residuals * dxdt_interp_i, axis=(0, 1))
+    # # print("cog params:", cog_i.shape, cog_a.shape, np.size(cog_b))
+    # cog_pred = cog_i @ cog_a + cog_b
+    # cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred) ** 2)
+    # grad_cog = 2 * lambda_cog * np.sum(t_pred_i - cog_pred)
+
+    # loss = np.sum(residuals ** 2) + cog_prior
+    # grad = grad_reconstruction + grad_cog
+    # return loss, grad
 
 def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
                               X_pred: np.ndarray, t_span: np.ndarray,

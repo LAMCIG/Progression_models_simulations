@@ -114,3 +114,34 @@ def set_diagonal_K(K: np.ndarray, s: float = 1.0, k: float = 0.05): # TODO: ask 
     return K_diag
     # then return K with a diag
     
+    
+def compute_sK_sens(x0, f, K, t_span, alpha, t_eval=None, method="LSODA"):
+    """
+    
+    """
+    n = x0.size
+
+    def rhs(t, y):
+        x = y[:n]
+        s = y[n:]                 # S_alpha
+
+        Kx = K @ x
+        h = alpha * Kx + f        # g factor inside logistic
+        dx = (1.0 - x) * h
+
+        # J_x @ s  (without forming J explicitly)
+        # J_x = -diag(h) + (I - diag(x)) * alpha * K
+        J_s = -h * s + (1.0 - x) * (alpha * (K @ s))
+
+        dgdalpha = (1.0 - x) * Kx
+        ds = J_s + dgdalpha
+
+        return np.concatenate([dx, ds])
+
+    y0 = np.concatenate([x0, np.zeros_like(x0)])
+    sol = solve_ivp(rhs, (t_span[0], t_span[-1]), y0, method=method, t_eval=t_eval, rtol=1e-6, atol=1e-8)
+    x = sol.y[:n]
+    S_alpha = sol.y[n:]
+    return sol.t, x, S_alpha
+
+    
