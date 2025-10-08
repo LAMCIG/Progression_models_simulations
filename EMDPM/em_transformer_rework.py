@@ -6,7 +6,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from .optimizer_theta import fit_theta
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
-from .utils import solve_system, initialize_beta
+from .utils import solve_system, initialize_beta, compute_kappa_sens, compute_sK_sens
 
 
 class EM(BaseEstimator, TransformerMixin):
@@ -102,7 +102,7 @@ class EM(BaseEstimator, TransformerMixin):
 
         X_obs = np.vstack(X_obs_list)
         dt = np.concatenate(dt_list)
-        cog = np.hstack(cog_list)
+        cog = np.vstack(cog_list)
         ids = np.concatenate(ids_list)
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)

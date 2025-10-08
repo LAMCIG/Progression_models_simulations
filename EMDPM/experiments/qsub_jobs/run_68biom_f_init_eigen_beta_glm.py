@@ -14,8 +14,9 @@ args = parser.parse_args()
 current_candidate = args.candidate
 
 df = pd.read_csv("/data01/bgutman/MRI_data/PPMI/data_ppmi_pd.csv")
-# df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_22.csv")
-df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
+df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_22.csv")
+# df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
+# df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.1.csv")
 n_biomarkers = 68
 
 ## remove non-longitudinal observations
@@ -221,7 +222,7 @@ beta_val = em.transform(X_val)
 
 out_dir = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results"
 os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, f"f_init_glm_eigen_sparse03_{current_candidate}.npz")
+out_path = os.path.join(out_dir, f"f_init_glm_eigen_meanK_alphakappatest_{current_candidate}.npz")
 
 np.savez(out_path,
          theta_history=np.array(em.theta_history),
@@ -230,5 +231,6 @@ np.savez(out_path,
          lse_history=np.array(em.lse_history),
          beta_val=np.array(beta_val),
          candidate=current_candidate,
-         f_init=f_init)
+         f_init=f_init        
+         )
 print("Saved:", out_path)
