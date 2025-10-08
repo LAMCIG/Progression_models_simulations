@@ -266,7 +266,8 @@ def plot_all_patient_regression_lines_grid_nhy(X, dt, ids, beta, t_span, nhy, mo
     mean_nhy = {}
     for pid in unique_ids:
         nhy_i = nhy[ids == pid]
-        mean_nhy[pid] = np.mean(nhy_i) if len(nhy_i) > 0 else np.nan
+        mean_nhy[pid] = np.max(nhy_i) if len(nhy_i) > 0 else np.nan
+        # mean_nhy[pid] = np.mean(nhy_i) if len(nhy_i) > 0 else np.nan
 
     # colormap setup
     cmap = cm.plasma  # viridis # inferno
@@ -347,7 +348,7 @@ def plot_all_patient_regression_lines_grid_nhy(X, dt, ids, beta, t_span, nhy, mo
     fig.subplots_adjust(right=0.88)  # make space for colorbar on right
     cbar_ax = fig.add_axes([1.01, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
     cbar = fig.colorbar(sm, cax=cbar_ax)
-    cbar.set_label("Mean HY Score")
+    cbar.set_label("final HY Score")
     
     plt.tight_layout()
     plt.show()

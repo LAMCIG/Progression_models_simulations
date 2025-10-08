@@ -14,8 +14,8 @@ args = parser.parse_args()
 current_candidate = args.candidate
 
 df = pd.read_csv("/data01/bgutman/MRI_data/PPMI/data_ppmi_pd.csv")
-# df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_22.csv")
-df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
+df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_22.csv")
+# df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
 n_biomarkers = 68
 
 ## remove non-longitudinal observations
@@ -44,9 +44,47 @@ biomarker_names = [col for col in df.columns
 
 print(biomarker_names)
 
-# X_obs = df[small_region_set]
 X_obs = X_obs.to_numpy()
-X_obs = np.max(X_obs, axis=0) - X_obs
+
+# --- per-patient, per-biomarker trend-based flipping ---
+unique_ids = np.unique(df["subj_id"].to_numpy())
+id_array   = df["subj_id"].to_numpy()
+t_array    = (df["time"].to_numpy() / 12.0).astype(float)  # years
+
+n_rows, n_biomarkers = X_obs.shape
+flip_log = np.zeros((len(unique_ids), n_biomarkers), dtype=bool)  # optional: track what flipped
+
+# threshold to avoid flipping on near-zero / noisy negative slopes
+NEG_SLOPE_EPS = -1e-6
+
+for pid_idx, pid in enumerate(unique_ids):
+    mask = (id_array == pid)
+    t_i  = t_array[mask]                  # (n_visits_i,)
+    # safety: require at least 2 points (your data has >1 visit by construction)
+    if t_i.size < 2:
+        continue
+
+    # loop over biomarkers
+    row_idxs = np.where(mask)[0]          # indices into X_obs rows for this patient
+    for b in range(n_biomarkers):
+        v = X_obs[row_idxs, b].astype(float)
+
+        # quick linear trend estimate: slope from polyfit degree 1
+        # slope *should* be >= 0 for "low -> high"; if negative enough, we flip
+        try:
+            p = np.polyfit(t_i, v, 1)
+            slope = float(p[0])
+        except Exception:
+            # fallback: if polyfit fails, just skip flipping
+            slope = 0.0
+
+        if slope < NEG_SLOPE_EPS:
+            vmin = np.min(v)
+            vmax = np.max(v)
+            # reflect about the midpoint (min+max)/2
+            v_flipped = (vmin + vmax) - v
+            X_obs[row_idxs, b] = v_flipped
+            flip_log[pid_idx, b] = True
 
 print("nans in X:", np.isnan(X_obs).sum())
 print("infs in X:", np.isinf(X_obs).sum())
@@ -221,7 +259,7 @@ beta_val = em.transform(X_val)
 
 out_dir = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results"
 os.makedirs(out_dir, exist_ok=True)
-out_path = os.path.join(out_dir, f"f_init_glm_eigen_sparse03_{current_candidate}.npz")
+out_path = os.path.join(out_dir, f"f_init_glm_eigen_flippy_{current_candidate}.npz")
 
 np.savez(out_path,
          theta_history=np.array(em.theta_history),

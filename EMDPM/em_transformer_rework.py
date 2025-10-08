@@ -102,7 +102,7 @@ class EM(BaseEstimator, TransformerMixin):
 
         X_obs = np.vstack(X_obs_list)
         dt = np.concatenate(dt_list)
-        cog = np.hstack(cog_list)
+        cog = np.vstack(cog_list)
         ids = np.concatenate(ids_list)
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
