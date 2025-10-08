@@ -47,18 +47,18 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
 
     # times for this patient
     t_pred_i = dt_i + beta_i
-    # clip to avoid extrap/NaNs
     t_pred_i = np.clip(t_pred_i, t_span[0], t_span[-1])
 
     # interpolate UNscaled x, then scale by s for prediction
-    x_unscaled_i = np.vstack([np.interp(t_pred_i, t_span, X_pred[b]) for b in range(n_biomarkers)])
-    x_pred_i = (s[:, None] * x_unscaled_i)  # (n_biomarkers, n_visits_i)
+    x_unscaled_i = np.vstack([np.interp(t_pred_i, t_span, X_pred[b])
+                              for b in range(n_biomarkers)])                 # (n, n_vis)
+    x_pred_i = s[:, None] * x_unscaled_i                                      # (n, n_vis)
 
     residuals = X_obs_i.T - x_pred_i
     recon_loss = np.sum(residuals**2)
 
-    # cognitive prior
-    cog_pred = cog_i @ cog_a + cog_b                  # (n_visits_i,)
+    # cognitive prior in time domain
+    cog_pred = cog_i @ cog_a + cog_b                                          # (n_vis,)
     cog_prior = lambda_cog * np.sum((t_pred_i - cog_pred)**2)
 
     return recon_loss + cog_prior
@@ -86,8 +86,9 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     n_biomarkers = X_pred.shape[0]         # int
     f = theta[:n_biomarkers]               # (n_biomarkers,)
     s = theta[n_biomarkers:2*n_biomarkers] # (n_biomarkers,)
-    scalar_K = theta[-1]                   # float
-
+    scalar_K = theta[-2]                   # float
+    kappa = theta[-1]
+    
     t_pred_i = dt_i + beta_i               # (n_visits_i,)
     t_pred_i = np.clip(t_pred_i, t_span[0], t_span[-1])
     
@@ -98,24 +99,24 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     
     #9/14/2025 - removing scaling from interp
     
-    x_unscaled_i = np.vstack([np.interp(t_pred_i, t_span, X_pred[b]) for b in range(n_biomarkers)])  # (n, n_vis)
+    x_unscaled_i = np.vstack([np.interp(t_pred_i, t_span, X_pred[b]) for b in range(n_biomarkers)]) # (n, n_vis)
     x_pred_i = s[:, None] * x_unscaled_i
     residuals = X_obs_i.T - x_pred_i
     
-    Kx = K @ x_unscaled_i                               # (n, n_vis)
-    rhs = scalar_K * Kx + f[:, None]                    # (n, n_vis)
-    xdot = (1.0 - x_unscaled_i) * rhs                   # (n, n_vis)
+    Kx = K @ x_unscaled_i                                          # (n, n_vis)
+    rhs = scalar_K * Kx + (kappa * x_unscaled_i) + f[:, None]      # (n, n_vis)
+    xdot = (1.0 - x_unscaled_i) * rhs                              # (n, n_vis)
 
-    # 4) d_x_pred/d_beta
+    # d_x_pred/d_beta
     dxbeta = s[:, None] * xdot
 
     recon_loss = np.sum(residuals**2)
     grad_recon = -2.0 * np.sum(residuals * dxbeta)      # scalar
 
-    cog_pred = cog_i @ cog_a + cog_b                    # (n_vis,)
-    cog_err = (t_pred_i - cog_pred)                     # (n_vis,)
+    cog_pred = cog_i @ cog_a + cog_b                                         # (n_vis,)
+    cog_err = (t_pred_i - cog_pred)
     cog_prior = lambda_cog * np.sum(cog_err**2)
-    grad_cog = 2.0 * lambda_cog * np.sum(cog_err)       # d/dbeta of sum_j (beta + dt - pred)^2
+    grad_cog = 2.0 * lambda_cog * np.sum(cog_err)      
 
     loss = recon_loss + cog_prior
     grad = grad_recon + grad_cog
@@ -147,25 +148,16 @@ def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarr
                               theta: np.ndarray, K: np.ndarray, lambda_cog: float = 0.0,
                               use_jacobian: bool = False, t_max: float = 12.0) -> float:
     """
-    Estimates the optimal beta_i for a single patient.
-
-    Parameters
-    ----------
-    # TODO: DOCSTRINGS
-    Returns
-    -------
-    float
-        Optimized beta_i value for the patient.
+    Optimize beta_i for a single patient using L-BFGS-B.
     """
-    #beta_guess = np.median(dt_obs)
     beta_guess = beta_i
-    
-    if use_jacobian == True:
+
+    if use_jacobian:
         loss_function = beta_loss_jac
-        args=(X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, K, lambda_cog)
+        args = (X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, K, lambda_cog)
     else:
         loss_function = beta_loss
-        args=(X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, lambda_cog)
+        args = (X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, lambda_cog)
 
     result = minimize(
         loss_function,

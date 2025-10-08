@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.integrate import solve_ivp
 
-def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray, scalar_K: float = 1.0) -> np.ndarray: #, alpha: float = 1.0) -> np.ndarray:
+def solve_system2(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray, scalar_K: float = 1.0) -> np.ndarray: #, alpha: float = 1.0) -> np.ndarray:
     """
     Solves the multivariate logistic ODE system given initial conditions and parameters.
 
@@ -59,6 +59,22 @@ def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarra
 
     return sol.y
 
+def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray,
+                 scalar_K: float = 1.0, kappa: float = 0.0) -> np.ndarray:
+    """
+    Solve dx/dt = (I - diag(x)) ( (scalar_K * K + kappa * I) x + f ),   x(0) = 0
+    Returns x with shape (n_biomarkers, len(t_span))
+    """
+    n = x0.size
+    I = np.eye(n)
+
+    def rhs(t, x):
+        Ax = (scalar_K * (K @ x)) + (kappa * x) + f
+        return (I - np.diag(x)) @ Ax
+
+    sol = solve_ivp(rhs, (t_span[0], t_span[-1]), x0, t_eval=t_span, method="LSODA")
+    return sol.y  # shape (n, T)
+
 def initialize_beta(ids: np.ndarray, beta_range: tuple = (0, 12), rng: np.random.Generator = None) -> np.ndarray:
     """
     Uniformly randomly initialize beta values for each unique patient ID.
@@ -113,35 +129,65 @@ def set_diagonal_K(K: np.ndarray, s: float = 1.0, k: float = 0.05): # TODO: ask 
     K_diag = s * K + k * I
     return K_diag
     # then return K with a diag
-    
-    
-def compute_sK_sens(x0, f, K, t_span, alpha, t_eval=None, method="LSODA"):
+        
+def compute_sK_sens(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray,
+                    scalar_K: float, kappa: float = 0.0, t_eval=None):
     """
-    
+    Forward sensitivity S_alpha = ∂x/∂scalar_K for
+        dx/dt = (I - diag(x))((scalar_K*K + kappa*I)x + f)
+
+    dS/dt = -diag(S)((scalar_K*K + kappa*I)x + f)
+            + (I - diag(x)) (K x + (scalar_K*K + kappa*I) S)
     """
     n = x0.size
+    I = np.eye(n)
+    if t_eval is None:
+        t_eval = t_span
 
-    def rhs(t, y):
+    def aug_rhs(t, y):
         x = y[:n]
-        s = y[n:]                 # S_alpha
-
+        S = y[n:].reshape(n)
+        Ax = (scalar_K * (K @ x)) + (kappa * x) + f
+        # main dynamics
+        dxdt = (I - np.diag(x)) @ Ax
+        # sensitivity wrt scalar_K (alpha)
         Kx = K @ x
-        h = alpha * Kx + f        # g factor inside logistic
-        dx = (1.0 - x) * h
-
-        # J_x @ s  (without forming J explicitly)
-        # J_x = -diag(h) + (I - diag(x)) * alpha * K
-        J_s = -h * s + (1.0 - x) * (alpha * (K @ s))
-
-        dgdalpha = (1.0 - x) * Kx
-        ds = J_s + dgdalpha
-
-        return np.concatenate([dx, ds])
+        dSdt = -np.diag(S) @ Ax + (I - np.diag(x)) @ (Kx + (scalar_K * K + kappa * I) @ S)
+        return np.concatenate([dxdt, dSdt])
 
     y0 = np.concatenate([x0, np.zeros_like(x0)])
-    sol = solve_ivp(rhs, (t_span[0], t_span[-1]), y0, method=method, t_eval=t_eval, rtol=1e-6, atol=1e-8)
-    x = sol.y[:n]
-    S_alpha = sol.y[n:]
-    return sol.t, x, S_alpha
+    sol = solve_ivp(aug_rhs, (t_span[0], t_span[-1]), y0, t_eval=t_eval, method="LSODA")
+    X = sol.y[:n, :]
+    S_alpha = sol.y[n:, :]
 
-    
+    return sol.t, X, S_alpha
+
+
+def compute_kappa_sens(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray,
+                       scalar_K: float, kappa: float = 0.0, t_eval=None):
+    """
+    Forward sensitivity S_kappa = ∂x/∂kappa for
+        dx/dt = (I - diag(x))((scalar_K*K + kappa*I)x + f)
+
+    dS/dt = -diag(S)((scalar_K*K + kappa*I)x + f)
+            + (I - np.diag(x)) (x + (scalar_K*K + kappa*I) S)
+    """
+    n = x0.size
+    I = np.eye(n)
+    if t_eval is None:
+        t_eval = t_span
+
+    def aug_rhs(t, y):
+        x = y[:n]
+        S = y[n:].reshape(n)
+        Ax = (scalar_K * (K @ x)) + (kappa * x) + f
+        dxdt = (I - np.diag(x)) @ Ax
+        dSdt = -np.diag(S) @ Ax + (I - np.diag(x)) @ (x + (scalar_K * K + kappa * I) @ S)
+        return np.concatenate([dxdt, dSdt])
+
+    y0 = np.concatenate([x0, np.zeros_like(x0)])
+    sol = solve_ivp(aug_rhs, (t_span[0], t_span[-1]), y0, t_eval=t_eval, method="LSODA")
+    X = sol.y[:n, :]
+    S_kappa = sol.y[n:, :]
+
+    return sol.t, X, S_kappa

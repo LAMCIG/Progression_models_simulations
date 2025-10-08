@@ -145,10 +145,11 @@ class EM(BaseEstimator, TransformerMixin):
         else:
             initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
             
-        initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
+        initial_s = rng.uniform(0.1, 3, size=n_biomarkers) # TODO: find an initialization schema for this
         # initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
         initial_scalar_K = np.max(X_obs)
-        initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
+        initial_kappa = 0.1 # TODO: find an initialization schema for this
+        initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K, initial_kappa]])
         
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
@@ -174,7 +175,7 @@ class EM(BaseEstimator, TransformerMixin):
         cog_regression_history[:, 0] = np.concatenate([initial_cog_a, [initial_cog_b]])
         
         ## Compute Initial LSE
-        X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
+        X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K, kappa=initial_kappa)
         #print(X_pred.shape)
 
         initial_lse = 0.0
@@ -198,6 +199,7 @@ class EM(BaseEstimator, TransformerMixin):
         current_f = initial_f
         current_s = initial_s
         current_scalar_K = initial_scalar_K
+        current_kappa = initial_kappa
         current_cog_a = initial_cog_a
         current_cog_b = initial_cog_b
         
@@ -213,17 +215,22 @@ class EM(BaseEstimator, TransformerMixin):
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
             
-            current_theta = fit_theta(X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
-                                             t_span=self.t_span, use_jacobian=current_jac,
-                                             lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
-                                             beta_pred=current_beta, f_guess=current_f,
-                                             s_guess=current_s, scalar_K_guess=current_scalar_K, rng=rng
-                                      )
+            current_theta = fit_theta(
+                X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
+                t_span=self.t_span, use_jacobian=current_jac,
+                lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
+                beta_pred=current_beta,
+                f_guess=current_f, s_guess=current_s,
+                scalar_K_guess=current_scalar_K,
+                kappa_guess=current_kappa,
+                rng=rng
+            )
+
+            current_x0, current_f, current_s, current_scalar_K, current_kappa = current_theta
+            current_theta = np.concatenate((current_f, current_s, [current_scalar_K, current_kappa]))
             
-            current_x0, current_f, current_s, current_scalar_K = current_theta
-            current_theta = np.concatenate((current_f, current_s, [current_scalar_K]))
-            X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
-            theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
+            X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K, current_kappa)
+            theta_history[:, hist_idx] = current_theta
             lse = 0.0
             
             #print(f"Execution time: {end_theta - start_theta:.4f} seconds")
@@ -307,9 +314,11 @@ class EM(BaseEstimator, TransformerMixin):
 
 
         f = self.theta[:n_biomarkers]
-        scalar_K = self.theta[-1]
-        self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
-        
+        s = self.theta[n_biomarkers:2*n_biomarkers]
+        scalar_K = self.theta[-2]
+        kappa = self.theta[-1]
+        self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K, kappa)
+
         return self
     
     def transform(self, X: list[dict]) -> np.ndarray:
