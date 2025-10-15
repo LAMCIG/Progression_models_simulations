@@ -47,8 +47,8 @@ def theta_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j])
 
     residuals = x_obs - x_pred
-    # loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + lambda_scalar * scalar_K**2
-    loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + scalar_K**2
+    loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + lambda_scalar * scalar_K**2
+    #loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + scalar_K**2
 
     return loss
    

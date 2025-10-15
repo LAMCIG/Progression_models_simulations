@@ -1,0 +1,12 @@
+#!/bin/bash
+#PBS -N em_68biom_grid
+#PBS -l nodes=1:ppn=20
+#PBS -l walltime=24:00:00
+#PBS -l mem=32gb
+#PBS -j oe
+#PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_logs/
+#PBS -m abe
+
+cd $PBS_O_WORKDIR
+source ~/miniconda3/etc/profile.d/conda.sh
+python /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/run_68biom_subtyping.py
