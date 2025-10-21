@@ -240,7 +240,7 @@ ids_train = [p["id"] for p in X_train]
 ids_val   = [p["id"] for p in X_val]
 
 # final betas after fit for the training patients:
-beta_train = np.asarray(em.beta_, dtype=float)  # aligned with ids_train
+beta_train = em.beta_history[:, -1].astype(float)  # aligned with ids_train
 
 # betas for validation patients returned by transform:
 beta_val = np.asarray(beta_val, dtype=float)    # aligned with ids_val

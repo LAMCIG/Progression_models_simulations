@@ -101,6 +101,12 @@ def create_patient_list_for_subtyping(X_obs, ids, dt, cog, nhy, beta, theta, bio
     theta_base = {"f": np.array(theta["f"], float),
                   "s": np.array(theta["s"], float),
                   "scalar_K": float(theta["scalar_K"])}
+    
+    theta_vec = np.concatenate([
+    theta_base["f"],
+    theta_base["s"],
+    [theta_base["scalar_K"]]
+    ])
 
     plist = []
     for pid in unique_ids:
@@ -110,7 +116,7 @@ def create_patient_list_for_subtyping(X_obs, ids, dt, cog, nhy, beta, theta, bio
             "X_obs": X_arr[m],
             "dt": dt_arr[m],
             "beta": float(beta[pid]),
-            "theta_init": copy.deepcopy(theta_base),
+            "theta_init": theta_vec.copy(),
         }
         pdata["cog"] = cog_arr[m]
         pdata["nhy"] = nhy_arr[m]

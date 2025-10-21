@@ -87,7 +87,15 @@ def multi_logistic_deriv_force(t, x, K, f):
     """
     return (np.eye(K.shape[0]) - np.diag(x)) @ (K @ x + f)
 
-def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_matrix_type='random_offdiag', scalar_K = 1.0,seed = 75, rng = None):
+def generate_logistic_model(n_biomarkers=10,
+                            step=0.1,
+                            t_max=10,
+                            connectivity_matrix_type='random_offdiag',
+                            seed = 75,
+                            scalar_K = 1.0,
+                            rng = None,
+                            K = None,
+                            f = None):
     """
     Generate a synthetic multivariate logistic progression model.
     dx/dt = (I - diag(x)) @ (K @ x + f)
@@ -119,19 +127,53 @@ def generate_logistic_model(n_biomarkers=10, step=0.1, t_max=10, connectivity_ma
     
     t_eval = np.arange(0, t_max, step)
     x0 = np.zeros(n_biomarkers)
-    f = rng.gamma(shape=2, scale=0.005, size=n_biomarkers)
+    
+    if f is None:
+        f = rng.gamma(shape=2, scale=0.005, size=n_biomarkers)
+        f[f < 0.005] = 0.0 # remove small values
+    else:
+        f = np.asarray(f, float)
+        assert f.shape == (n_biomarkers,), "forcing term f must have shape (n_biomarkers,)"
+    
+    if K is None:
+        K = get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, rng)
+    else:
+        K = np.asarray(K, float)
+        assert K.shape == (n_biomarkers, n_biomarkers), "connectome K must be shape (n_biomarkers, n_biomarkers)"   
+       
+    if scalar_K is None:
+        scalar_K = 1.0
 
-    x0[x0 < 0.01] = 0  # probably unnecessary but just to get rid of some small values
-    f[f < 0.01] = 0
-
-    # TODO: add to verbose feedback
-    print(f"true x0: {x0}")
-    print(f"true f: {f}")
-
+    #x0[x0 < 0.005] = 0  # probably unnecessary but just to get rid of some small values
+    f[f < 0.005] = 0
+    
     K = get_adjacency_matrix(connectivity_matrix_type, n_biomarkers, rng)
     K_scaled = scalar_K * K
     
-    sol = solve_ivp(multi_logistic_deriv_force, t_span=[0, t_max], y0=x0, args=(K_scaled, f),
-                    t_eval=t_eval, method="LSODA")
+    sol = solve_ivp(multi_logistic_deriv_force,
+                    t_span=[0, t_max],
+                    y0=x0,
+                    args=(K_scaled, f),
+                    t_eval=t_eval,
+                    method="LSODA")
 
     return sol.t, sol.y, K, x0, f, scalar_K
+
+def create_patient_list(X_obs, ids, dt, cog, initial_beta=None):
+    unique_ids = np.unique(ids)
+    id_to_index = {pid: idx for idx, pid in enumerate(unique_ids)}
+
+    patient_list = []
+    for pid in unique_ids:
+        mask = (ids == pid)
+        patient_data = {
+            "id": pid,
+            "X_obs": X_obs[mask],
+            "dt": dt[mask],
+            "cog": cog[mask],
+        }
+        if initial_beta is not None:
+            patient_data["initial_beta"] = initial_beta[id_to_index[pid]]
+        patient_list.append(patient_data)
+
+    return patient_list
