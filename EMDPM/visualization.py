@@ -26,35 +26,51 @@ def plot_true_observations(df: pd.DataFrame, t: np.ndarray, x_true: np.ndarray, 
     Overlays observed biomarker values from selected patients on the true model trajectories.
     Each patient gets a unique color and marker.
     """
-    if patient_idx is None:
-        patient_idx = [0, 1, 2, 3, 4]
-
     n_biomarkers = x_true.shape[0]
-    colors = plt.get_cmap("tab10").colors  # ehhh should be more than 10
-    markers = ['o', 's', 'D', '^', 'v', 'P', 'X', '*', '<', '>'] # incase I want more
 
-    fig, ax = plt.subplots(figsize=(10, 4))
+    # Choose colormap based on number of biomarkers
+    if n_biomarkers <= 10:
+        cmap = plt.get_cmap("tab10")
+    elif n_biomarkers <= 20:
+        cmap = plt.get_cmap("tab20")
+    else:
+        cmap = plt.get_cmap("viridis")
 
-    # Plot true curves (gray background)
+    # Define marker styles
+    markers = ['o', 's', 'D', '^', 'v', 'P', 'X', '*', '<', '>']
+
+    fig, ax = plt.subplots(figsize=(10, 3))
+
+    # Plot colored true trajectories
     for i in range(n_biomarkers):
-        ax.plot(t, x_true[i], color="k", alpha=0.5, linewidth=1)
+        color = cmap(i % cmap.N)
+        ax.plot(t, x_true[i], color=color, alpha=0.9, linewidth=1.5, label=f"Biomarker {i+1}")
 
-    # Plot observations
-    for color_index, patient in enumerate(patient_idx):
-        patient_data = df[df["patient_id"] == patient]
-        t_ij = patient_data["beta_true"] + patient_data["dt"]
-        marker = markers[color_index % len(markers)]
-        color = colors[color_index % len(colors)]
+    # Plot observations if patient_idx provided
+    if patient_idx is not None:
+        for m_idx, patient in enumerate(patient_idx):
+            patient_data = df[df["patient_id"] == patient]
+            t_ij = patient_data["beta_true"] + patient_data["dt"]
+            marker = markers[m_idx % len(markers)]
 
-        for i in range(n_biomarkers):
-            y = patient_data[f"biomarker_{i+1}"]
-            ax.scatter(t_ij, y, color=color, marker=marker, s=30, label=f"Patient {patient}" if i == 0 else None)
+            for i in range(n_biomarkers):
+                y = patient_data[f"biomarker_{i+1}"]
+                ax.scatter(
+                    t_ij,
+                    y,
+                    color="black",
+                    marker=marker,
+                    s=30,
+                    edgecolors="white",
+                    linewidths=0.5,
+                    label=f"Patient {patient}" if i == 0 else None,
+                )
 
-    ax.set_title("Synthetic patient observations timepoints on groundtruth biomarker trajectories")
+    ax.set_title("Synthetic patient observations on ground-truth biomarker trajectories")
     ax.set_xlabel("Time")
     ax.set_ylabel("Biomarker Value")
-    ax.legend(ncol=len(patient_idx), fontsize=9)
-    # plt.tight_layout()
+    ax.legend(fontsize=8, ncol=3, frameon=False)
+    plt.tight_layout()
     plt.show()
 
 import matplotlib.pyplot as plt
@@ -393,4 +409,90 @@ def plot_violin_nhy_vs_tij(dt, ids, beta, nhy):
     plt.ylabel("t_ij")
     plt.grid(True)
     plt.tight_layout()
+    plt.show()
+
+def plot_patient_trajectories_by_biomarker(X, biomarker_indices):
+    """
+    For each biomarker in `biomarker_indices`, create a subplot showing that biomarker's
+    trajectory for all patients. Lines are color-coded by `subtype_true` using tab10.
+    Assumes each patient dict has:
+      - "X_pred_subject": array of shape (n_biomarkers, T)
+      - "subtype_true": int in [0..9] (tab10)
+    """
+    # Ensure X is iterable as a list of dicts
+    if isinstance(X, np.ndarray):
+        X_list = list(X)
+    else:
+        X_list = X
+
+    if len(X_list) == 0:
+        raise ValueError("X is empty.")
+
+    # infer time axis from the first patient
+    xps = X_list[0]["X_pred_subject"]
+    # xps expected shape: (n_biomarkers, T)
+    if xps.ndim != 2:
+        raise ValueError(f'X_pred_subject expected 2D (n_biomarkers, T), got shape {xps.shape}')
+    T = xps.shape[1]
+    # If you stored a real t_span, replace the line below with: t = X_list[0]["t_span"]
+    t = np.linspace(0.0, 1.0, T)  # normalized time if t_span not available
+
+    # figure layout: <=5 per row
+    n_plots = len(biomarker_indices)
+    n_cols = min(5, n_plots)
+    n_rows = (n_plots + n_cols - 1) // n_cols
+
+    cmap = plt.get_cmap("tab10")
+
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(4.5*n_cols, 4.5*n_rows))
+    if n_rows == 1 and n_cols == 1:
+        axes = np.array([[axes]])
+    elif n_rows == 1:
+        axes = np.array([axes])
+    elif n_cols == 1:
+        axes = axes[:, None]
+
+    plot_idx = 0
+    for r in range(n_rows):
+        for c in range(n_cols):
+            ax = axes[r, c]
+            if plot_idx >= n_plots:
+                # hide any extra axes
+                ax.axis('off')
+                continue
+
+            b = biomarker_indices[plot_idx]
+
+            # draw each patient's trajectory for biomarker b
+            # color by subtype_true
+            for i in range(len(X_list)):
+                p = X_list[i]
+                subtype = int(p.get("subtype_true", 0))
+                color = cmap(subtype % cmap.N)
+
+                xps_i = p["X_pred_subject"]
+                if xps_i.ndim != 2 or b >= xps_i.shape[0]:
+                    raise ValueError(f'Patient {i} has invalid X_pred_subject shape {xps_i.shape} or biomarker index {b}')
+                y = xps_i[b]  # shape (T,)
+                ax.plot(t, y, color=color, linewidth=1.2, alpha=0.9)
+
+            ax.set_title(f"biomarker {b+1}")
+            ax.set_xlabel("time (y)")
+            ax.set_ylabel("biomarker progression")
+            ax.set_aspect('equal', adjustable='box')  # square plot
+
+            plot_idx += 1
+
+    # Build a simple legend for subtypes (0..max present)
+    # Find unique subtypes present in X
+    subtypes_present = sorted({int(p.get("subtype_true", 0)) for p in X_list})
+    legend_lines = []
+    legend_labels = []
+    for s in subtypes_present:
+        legend_lines.append(plt.Line2D([0], [0], color=cmap(s % cmap.N), lw=3))
+        legend_labels.append(f"Subtype {s}")
+
+    # Put legend under the grid
+    fig.legend(legend_lines, legend_labels, loc="lower center", ncol=min(5, len(legend_labels)), frameon=False)
+    plt.subplots_adjust(bottom=0.12, wspace=0.3, hspace=0.35)
     plt.show()

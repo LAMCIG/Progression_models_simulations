@@ -6,8 +6,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from .optimizer_theta import fit_theta
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
-from .utils import solve_system, initialize_beta
-
+from .utils import *
 
 class EM(BaseEstimator, TransformerMixin):
     """
@@ -97,15 +96,22 @@ class EM(BaseEstimator, TransformerMixin):
             n = len(patient["dt"])
             X_obs_list.append(patient["X_obs"])
             dt_list.append(patient["dt"])
-            cog_list.append(patient["cog"])
-            ids_list.append(np.full(n, i))  # integer index for patient
+            ids_list.append(np.full(n, i))
+            cog_list.append(ensure_2d_cog(patient["cog"], n))  # <-- normalize per patient
             if "initial_beta" in patient:
                 initial_beta_list.append(patient["initial_beta"])
 
         X_obs = np.vstack(X_obs_list)
-        dt = np.concatenate(dt_list)
-        cog = np.vstack(cog_list)
-        ids = np.concatenate(ids_list)
+        dt    = np.concatenate(dt_list)
+        ids   = np.concatenate(ids_list)
+        cog   = np.vstack(cog_list)
+
+        # Defensive sanity checks
+        if not (len(dt) == len(ids) == X_obs.shape[0] == cog.shape[0]):
+            raise ValueError(
+                f"Stacked shapes disagree: X_obs={X_obs.shape}, dt={dt.shape}, "
+                f"ids={ids.shape}, cog={cog.shape}"
+            )
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
         n_patients = len(unique_ids)
@@ -187,7 +193,9 @@ class EM(BaseEstimator, TransformerMixin):
         for idx, pid in enumerate(np.unique(ids)): # each iter will be like (idx, pid)
             mask = (ids == pid)
             # print(np.size(mask), X_obs.shape, dt.shape, cog.shape)
-            X_obs_i, dt_i, cog_i = X_obs[mask,:], dt[mask], cog[mask,:]
+            X_obs_i = X_obs[mask,:]
+            dt_i = dt[mask]
+            cog_i = cog[mask,:]
             beta_i = initial_beta[idx]
             
             if current_jac:
@@ -309,7 +317,10 @@ class EM(BaseEstimator, TransformerMixin):
         self.theta = self.theta_history[:, -1]
         self.cog_a = self.cog_regression_history[:-1,-1]
         self.cog_b = self.cog_regression_history[-1, -1]
-
+        
+        self.final_f = self.theta[:n_biomarkers].copy()
+        self.final_s = self.theta[n_biomarkers:2*n_biomarkers].copy()
+        self.scalar_K_ = self.theta[-1]
 
         f = self.theta[:n_biomarkers]
         scalar_K = self.theta[-1]
@@ -378,20 +389,21 @@ class EM(BaseEstimator, TransformerMixin):
 
             lse += np.sum((X_obs_i - X_interp) ** 2)
         return lse
+    
+    def _ensure_2d_cog(c, n_rows_expected: int) -> np.ndarray:
+        c = np.asarray(c)
+        # (n_obs,) -> (n_obs, 1)
+        if c.ndim == 1:
+            c = c.reshape(-1, 1)
 
+        # (1, n_obs) -> (n_obs, 1)
+        if c.ndim == 2 and c.shape[0] == 1 and c.shape[1] == n_rows_expected:
+            c = c.T
 
-    from datetime import datetime
+        # Final check: first dim must match number of observations for this patient
+        if c.ndim != 2 or c.shape[0] != n_rows_expected:
+            raise ValueError(
+                f"cog shape mismatch; expected first dim {n_rows_expected}, got {c.shape}"
+            )
+        return c
 
-    def save(self, save_path: str = None):
-        if save_path == None:
-            loc = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/real_data_PPMI/"
-            name = f"ppmi_maxiter{self.max_iter}_jac{self.jac_toggle}_{datetime.now().strftime('%H-%M-%S')}.npz"
-            save_path = loc + name
-        save_dir = os.path.dirname(save_path)
-        os.makedirs(save_dir, exist_ok=True)
-        np.savez_compressed(save_path,
-                            theta_history=self.theta_history,
-                            beta_history=self.beta_history,
-                            lse_history=self.lse_history,
-                            cog_regression_history=self.cog_regression_history)
-        print(f"Saved histories to {save_path}.npz")
