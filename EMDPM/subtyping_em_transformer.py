@@ -3,12 +3,13 @@ import os
 import pandas as pd
 from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
-from .optimizer_theta import fit_theta
+from .optimizer_theta_globals import fit_theta_globals
+from .optimizer_theta_cluster import fit_theta_cluster
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
 from .utils import *
 
-class EM(BaseEstimator, TransformerMixin):
+class SubtypingEM(BaseEstimator, TransformerMixin):
     """
     EM algorithm for recovering disease progression model parameters
     and patient-specific time shifts from cross-sectional observations.
@@ -37,6 +38,9 @@ class EM(BaseEstimator, TransformerMixin):
                  epsilon: float = 1e-2,
                  relative_tolerance: float = 1e-3,
                  
+                 # [clustering parmaters]
+                 n_subtypes = 2,
+                  
                  # [misc options]
                  verbose = 1,
                  ):
@@ -65,24 +69,19 @@ class EM(BaseEstimator, TransformerMixin):
         self.epsilon = epsilon
         self.relative_tolerance = relative_tolerance
         
+        # [clustering params]
+        self.n_subtypes = n_subtypes
+        
         # [misc options]
         self.verbose = verbose
         
     def fit(self, X: np.ndarray, y: np.ndarray = None):
-        # 2025.6.22 - will temporarily assign class vars to regular vars, TODO: refactor class vars
-        # ids = self.ids
-        # dt = self.dt
-        # cog = self.cog
-        # K = self.K
-        # save_path = self.save_path
         
-        # X_obs = X["X_obs"] # 2025.6.23 - I will refactor X in this function to X_obs later -DS
-        # dt = X["dt"]
-        # ids = X["ids"]
-        # cog = X["cog"]
-        
-        unique_ids = [p["id"] for p in X]
-        id_to_index = {pid: i for i, pid in enumerate(unique_ids)}
+        ## data handling
+        patient_ids = [p["id"] for p in X]
+        n_patients = len(patient_ids)
+        n_biomarkers = X[0]["X_obs"].shape[1]
+        self.t_span = np.linspace(0.0, self.t_max, int(self.t_max / self.step))
 
         X_obs_list = []
         dt_list = []
@@ -95,7 +94,7 @@ class EM(BaseEstimator, TransformerMixin):
             X_obs_list.append(patient["X_obs"])
             dt_list.append(patient["dt"])
             ids_list.append(np.full(n, i))
-            cog_list.append(ensure_2d_cog(patient["cog"], n))  # <-- normalize per patient
+            cog_list.append(ensure_2d_cog(patient["cog"], n)) 
             if "initial_beta" in patient:
                 initial_beta_list.append(patient["initial_beta"])
 
@@ -104,7 +103,7 @@ class EM(BaseEstimator, TransformerMixin):
         ids   = np.concatenate(ids_list)
         cog   = np.vstack(cog_list)
 
-        # Defensive sanity checks
+        # assert
         if not (len(dt) == len(ids) == X_obs.shape[0] == cog.shape[0]):
             raise ValueError(
                 f"Stacked shapes disagree: X_obs={X_obs.shape}, dt={dt.shape}, "
@@ -112,7 +111,6 @@ class EM(BaseEstimator, TransformerMixin):
             )
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
-        n_patients = len(unique_ids)
 
         if initial_beta_list:
             initial_beta = np.array(initial_beta_list)
@@ -120,13 +118,11 @@ class EM(BaseEstimator, TransformerMixin):
             initial_beta = initialize_beta(ids=np.arange(n_patients), beta_range=(0, self.t_max), rng=self.rng)
 
         K = self.K
-        #initial_beta = X.get("initial_beta", None)
 
-        
         rng = self.rng
         self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step)) # I dont know why this is a class variable might be for plotting
         n_biomarkers = np.size(X_obs,1) # rows = observations, columns = biomarkers
-        n_patients = len(np.unique(ids))
+        
         n_obs = X_obs.shape[0]
         
         if cog.ndim == 1: # cog.shape = (n_obs, n_cog_features)
@@ -148,29 +144,21 @@ class EM(BaseEstimator, TransformerMixin):
         # forcing term, random initialization if None
         if self.initial_f is not None:
             initial_f = self.initial_f
+            # Ensure initial_f is 1D (flatten if 2D)
+            initial_f = np.ravel(initial_f)
         else:
             initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
             
         initial_s = rng.uniform(0.1, 3, size=n_biomarkers)
         # initial_scalar_K = float(rng.uniform(0.01, 3, size=1))
-        initial_scalar_K = np.max(X_obs)
+        initial_scalar_K = float(np.max(X_obs))
+        
         initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
         
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
-        
-        #initial_cog_a = rng.uniform(1, 5, n_cog_features) # initialize a weight for each type of cog test
-        #initial_cog_b = float(rng.uniform(0, 10)) # bias term
-        
-        ## move these later towards the end for a summary:
-        # print("initial conditions:")
-        # print(f"n_patients: {n_patients}, n_obs: {n_obs}")
-        # print(f"initial f: {initial_f}")
-        # print(f"initial s: {initial_s}")
-        # print(f"initial scalar K: {initial_scalar_K}")
-        # print(f"initial beta: {initial_beta.shape}"," K shape: ", K.shape)
-        
+                
         ## initialize histories
         theta_history = np.zeros((initial_theta.shape[0], self.max_iter + 1)) # extra column added for initial guesses
         beta_history = np.zeros((n_patients, self.max_iter + 1))
@@ -184,8 +172,6 @@ class EM(BaseEstimator, TransformerMixin):
         
         ## Compute Initial LSE
         X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
-        #print(X_pred.shape)
-
         initial_lse = 0.0
         
         for idx, pid in enumerate(np.unique(ids)): # each iter will be like (idx, pid)
@@ -206,13 +192,30 @@ class EM(BaseEstimator, TransformerMixin):
         
         # initialize current vars for main loop
         current_beta = initial_beta
-        current_f = initial_f
         current_s = initial_s
-        current_scalar_K = initial_scalar_K
         current_cog_a = initial_cog_a
         current_cog_b = initial_cog_b
         
-        #print(f"prepend complete")
+        # Initialize cluster-level parameters
+        # Each cluster has its own f and scalar_K
+        cluster_f = []
+        cluster_scalar_K = []
+        for subtype in range(self.n_subtypes):
+            if self.initial_f is not None:
+                # Ensure initial_f is 1D before using it
+                initial_f_flat = np.ravel(self.initial_f)
+                cluster_f.append(initial_f_flat.copy() + rng.uniform(-0.01, 0.01, size=n_biomarkers))
+            else:
+                cluster_f.append(rng.uniform(0, 0.1, size=n_biomarkers))
+            cluster_scalar_K.append(initial_scalar_K * rng.uniform(0.8, 1.2))
+        
+        # Initialize cluster assignments (random for now)
+        assignments = rng.integers(0, self.n_subtypes, size=n_patients)
+        
+        # Store assignment history
+        assignment_history = np.zeros((n_patients, self.max_iter + 1), dtype=int)
+        assignment_history[:, 0] = assignments
+        
         ### MAIN LOOP ###
         loop_iter = 0
         
@@ -224,52 +227,124 @@ class EM(BaseEstimator, TransformerMixin):
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
             
-            current_theta = fit_theta(X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
-                                             t_span=self.t_span, use_jacobian=current_jac,
-                                             lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
-                                             beta_pred=current_beta, f_guess=current_f,
-                                             s_guess=current_s, scalar_K_guess=current_scalar_K, rng=rng
-                                      )
+            ## STEP 1: GLOBAL LEVEL --> update s (using all patients)
+            # Use average f and scalar_K across clusters as reference for global s update
+            # For now, use the first cluster's parameters as reference
+            ref_f = np.ravel(cluster_f[0])  # Ensure ref_f is 1D
+            ref_scalar_K = cluster_scalar_K[0]
             
-            current_x0, current_f, current_s, current_scalar_K = current_theta
-            current_theta = np.concatenate((current_f, current_s, [current_scalar_K]))
-            X_pred = solve_system(current_x0, current_f, K, self.t_span, current_scalar_K)
-            theta_history[:,hist_idx] = np.concatenate((current_f, current_s, [current_scalar_K]))
+            current_s = fit_theta_globals(
+                X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
+                t_span=self.t_span, use_jacobian=current_jac,
+                f=ref_f, scalar_K=ref_scalar_K,
+                beta_pred=current_beta,
+                s_guess=current_s,
+                lambda_s=0.0,
+                rng=rng
+            )
+            
+            ## STEP 2: RECOMPUTE CLUSTER ASSIGNMENTS (hard assignment)
+            # Assign each patient to the cluster that gives lowest reconstruction error
+            assignments = self._update_assignments(
+                X_obs, dt, ids, cog, current_beta,
+                cluster_f, cluster_scalar_K, current_s,
+                K, self.t_span, current_cog_a, current_cog_b,
+                self.lambda_cog
+            )
+            assignment_history[:, hist_idx] = assignments
+            
+            ## STEP 3: CLUSTER LEVEL --> update f[subtype] and scalar_K[subtype] for each cluster
+            # TODO: This should be run in parallel
+            for subtype in range(self.n_subtypes):
+                # get mask for patients in this cluster
+                cluster_mask = (assignments == subtype)
+                cluster_patient_indices = np.where(cluster_mask)[0]
+                
+                if len(cluster_patient_indices) == 0:
+                    # empty cluster - skip or reinitialize
+                    if self.verbose >= 2:
+                        print(f"Warning: Cluster {subtype} is empty at iteration {loop_iter}")
+                    continue
+                
+                # Get observations for patients in this cluster
+                cluster_patient_mask = np.isin(ids, cluster_patient_indices)
+                X_obs_cluster = X_obs[cluster_patient_mask, :]
+                dt_cluster = dt[cluster_patient_mask]
+                ids_cluster = ids[cluster_patient_mask]
+                
+                # Map original patient indices to cluster-local indices
+                unique_cluster_ids = np.unique(ids_cluster)
+                cluster_id_to_local = {orig_id: local_idx for local_idx, orig_id in enumerate(unique_cluster_ids)}
+                ids_cluster_local = np.array([cluster_id_to_local[i] for i in ids_cluster])
+                beta_cluster = current_beta[cluster_patient_indices]
+                
+                # Update cluster parameters
+                # Ensure f_guess is 1D
+                f_guess_flat = np.ravel(cluster_f[subtype])
+                f_cluster, scalar_K_cluster = fit_theta_cluster(
+                    X_obs=X_obs_cluster, dt_obs=dt_cluster, ids=ids_cluster_local, K=K,
+                    t_span=self.t_span, use_jacobian=current_jac,
+                    s=current_s,
+                    lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
+                    beta_pred=beta_cluster,
+                    f_guess=f_guess_flat,
+                    scalar_K_guess=cluster_scalar_K[subtype],
+                    rng=rng
+                )
+                
+                # Ensure f_cluster is 1D before storing
+                cluster_f[subtype] = np.ravel(f_cluster)
+                cluster_scalar_K[subtype] = scalar_K_cluster
+            
+            ## STEP 4: SUBJECT LEVEL BETA --> update beta using cluster-level theta
             lse = 0.0
-            
-            #print(f"Execution time: {end_theta - start_theta:.4f} seconds")
-            
-            # TODO: Attempt parallel beta computation
-            ### beta comuputaiton
             for idx, patient_id in enumerate(np.unique(ids)):
                 mask = (ids == patient_id)
-                X_obs_i = X_obs[mask,:]  # (n_obs_i, n_biomarkers)
-                dt_i = dt[mask]    # (n_obs_i,)
-                cog_i = cog[mask,:]  # (n_obs_i, n_cog_features)
+                X_obs_i = X_obs[mask, :]  # (n_obs_i, n_biomarkers)
+                dt_i = dt[mask]  # (n_obs_i,)
+                cog_i = cog[mask, :]  # (n_obs_i, n_cog_features)
                 beta_i = current_beta[idx]
-            
-                #print("breakpoint 6: ", x_obs_i.shape, x_obs_i.dtype,dt_i.shape, dt_i.dtype, cog_i.shape, cog_i.dtype, beta_i)  
-                #print("breakpoint 8: ", current_cog_a.shape)
-                #if X_obs_i.shape[0] != dt_i.shape:
-                #    print(patient_id, X_obs_i.shape, dt_i.shape)
-                    
-                beta_i = estimate_beta_for_patient(beta_i=beta_i, X_obs_i=X_obs_i, dt_i=dt_i,
-                                                   X_pred=X_pred, t_span=self.t_span,
-                                                   cog_i = cog_i, cog_a = current_cog_a, cog_b = current_cog_b,
-                                                   theta = current_theta, K=K, lambda_cog = self.lambda_cog,
-                                                   use_jacobian = True, t_max = self.t_max
-                                                   )
-       
-                if current_jac == True:
-                    res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, current_theta, K, self.lambda_cog)
+                
+                # get the cluster assignment for this patient
+                subtype_i = assignments[idx]
+                f_cluster_i = np.ravel(cluster_f[subtype_i])  # Ensure 1D
+                scalar_K_cluster_i = cluster_scalar_K[subtype_i]
+                
+                # build cluster-specific theta and X_pred
+                theta_cluster_i = np.concatenate([f_cluster_i, current_s, [scalar_K_cluster_i]])
+                X_pred_cluster_i = solve_system(np.zeros(n_biomarkers), f_cluster_i, K, self.t_span, scalar_K_cluster_i)
+                
+                # update beta using cluster-specific parameters
+                beta_i = estimate_beta_for_patient(
+                    beta_i=beta_i, X_obs_i=X_obs_i, dt_i=dt_i,
+                    X_pred=X_pred_cluster_i, t_span=self.t_span,
+                    cog_i=cog_i, cog_a=current_cog_a, cog_b=current_cog_b,
+                    theta=theta_cluster_i, K=K, lambda_cog=self.lambda_cog,
+                    use_jacobian=current_jac, t_max=self.t_max
+                )
+                
+                # Compute loss for this patient
+                if current_jac:
+                    res, _ = beta_loss_jac(
+                        beta_i, X_obs_i, dt_i, X_pred_cluster_i, self.t_span,
+                        cog_i, current_cog_a, current_cog_b, theta_cluster_i, K, self.lambda_cog
+                    )
                 else:
-                    res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, current_cog_a, current_cog_b, current_theta, self.lambda_cog)
+                    res = beta_loss(
+                        beta_i, X_obs_i, dt_i, X_pred_cluster_i, self.t_span,
+                        cog_i, current_cog_a, current_cog_b, theta_cluster_i, self.lambda_cog
+                    )
                 lse += res
                 
-                current_beta[idx] = beta_i 
-            beta_history[:,hist_idx] = current_beta
+                current_beta[idx] = beta_i
+            beta_history[:, hist_idx] = current_beta
+            
+            # Store cluster parameters in history (for first cluster as representative)
+            # Note: In full implementation, you might want to store all cluster parameters
+            representative_theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [cluster_scalar_K[0]]])
+            theta_history[:, hist_idx] = representative_theta
 
-            #if self.use_jacobian and lse > best_lse and not jacobian_switched:
+            # if self.use_jacobian and lse > best_lse and not jacobian_switched:
             # if self.use_jacobian and best_lse - lse > 1e-3 * best_lse and not jacobian_switched:
             
             delta = best_lse - lse
@@ -311,20 +386,73 @@ class EM(BaseEstimator, TransformerMixin):
         self.beta_history = beta_history[:, 0:hist_idx+1]
         self.lse_history = lse_history[0:hist_idx+1]
         self.cog_regression_history = cog_regression_history[:, 0:hist_idx+1]
+        self.assignment_history = assignment_history[:, 0:hist_idx+1]
         
-        self.theta = self.theta_history[:, -1]
-        self.cog_a = self.cog_regression_history[:-1,-1]
+        # Store final cluster parameters
+        self.cluster_f = cluster_f
+        self.cluster_scalar_K = cluster_scalar_K
+        self.final_s = current_s
+        self.final_assignments = assignments
+        
+        # Store representative theta (first cluster)
+        self.theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [cluster_scalar_K[0]]])
+        self.cog_a = self.cog_regression_history[:-1, -1]
         self.cog_b = self.cog_regression_history[-1, -1]
         
-        self.final_f = self.theta[:n_biomarkers].copy()
-        self.final_s = self.theta[n_biomarkers:2*n_biomarkers].copy()
-        self.scalar_K_ = self.theta[-1]
+        self.final_f = np.ravel(cluster_f[0]).copy()  # Representative f (ensure 1D)
+        self.scalar_K_ = cluster_scalar_K[0]  # Representative scalar_K
 
-        f = self.theta[:n_biomarkers]
-        scalar_K = self.theta[-1]
+        # For transform, use first cluster as default
+        f = np.ravel(cluster_f[0])  # Ensure 1D
+        scalar_K = cluster_scalar_K[0]
         self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
         
         return self
+    
+    def _update_assignments(self, X_obs, dt, ids, cog, beta, cluster_f, cluster_scalar_K, s,
+                            K, t_span, cog_a, cog_b, lambda_cog):
+        """
+        Update cluster assignments using hard assignment based on reconstruction error.
+        
+        For each patient, compute reconstruction error with each cluster's parameters
+        and assign to the cluster with lowest error.
+        """
+        n_patients = len(np.unique(ids))
+        n_subtypes = len(cluster_f)
+        assignments = np.zeros(n_patients, dtype=int)
+        
+        unique_ids = np.unique(ids)
+        
+        for idx, patient_id in enumerate(unique_ids):
+            mask = (ids == patient_id)
+            X_obs_i = X_obs[mask, :]
+            dt_i = dt[mask]
+            cog_i = cog[mask, :]
+            beta_i = beta[idx]
+            
+            best_error = np.inf
+            best_subtype = 0
+            
+            # Try each cluster and find the one with lowest reconstruction error
+            for subtype in range(n_subtypes):
+                f_cluster = np.ravel(cluster_f[subtype])  # Ensure 1D
+                scalar_K_cluster = cluster_scalar_K[subtype]
+                theta_cluster = np.concatenate([f_cluster, s, [scalar_K_cluster]])
+                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K_cluster)
+                
+                # Compute reconstruction error
+                error = beta_loss(
+                    beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
+                    cog_i, cog_a, cog_b, theta_cluster, lambda_cog
+                )
+                
+                if error < best_error:
+                    best_error = error
+                    best_subtype = subtype
+            
+            assignments[idx] = best_subtype
+        
+        return assignments
     
     def transform(self, X: list[dict]) -> np.ndarray:
         """

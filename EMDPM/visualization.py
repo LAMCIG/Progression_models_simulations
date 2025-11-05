@@ -243,8 +243,9 @@ def plot_lse(lse_array: np.ndarray) -> None:
     """
     Plots LSE trace across iterations.
     """
-    plt.figure(figsize=(10, 4))
+    plt.figure(figsize=(8, 4))
     plt.plot(np.arange(len(lse_array)), lse_array)
+    plt.title("Least squares error (LSE) per iterations")
     plt.yscale('log')
     plt.xlabel("iteration")
     plt.ylabel("LSE")
