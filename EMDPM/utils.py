@@ -1,5 +1,8 @@
 import numpy as np
+import pandas as pd
 from scipy.integrate import solve_ivp
+from scipy.optimize import linear_sum_assignment
+import statsmodels.formula.api as smf
 
 def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray, scalar_K: float = 1.0) -> np.ndarray: #, alpha: float = 1.0) -> np.ndarray:
     """
@@ -130,3 +133,234 @@ def ensure_2d_cog(c, n_rows_expected: int) -> np.ndarray:
             f"cog shape mismatch; expected first dim {n_rows_expected}, got {c.shape}"
         )
     return c
+
+
+def match_labels_best_overlap(em_labels: np.ndarray, true_labels: np.ndarray) -> np.ndarray:
+    """
+    Match EM-assigned labels to true labels based on best overlap using Hungarian algorithm.
+    
+    This function finds the optimal permutation of EM labels that maximizes agreement
+    with true labels. This is necessary because EM assigns arbitrary label numbers
+    that don't necessarily correspond to true subtype indices.
+    
+    Parameters
+    ----------
+    em_labels : np.ndarray
+        Labels assigned by EM algorithm (shape: n_patients,)
+    true_labels : np.ndarray
+        True subtype labels (shape: n_patients,)
+    
+    Returns
+    -------
+    np.ndarray
+        Remapped EM labels that best match true labels (shape: n_patients,)
+    """
+    em_labels = np.asarray(em_labels)
+    true_labels = np.asarray(true_labels)
+    
+    if len(em_labels) != len(true_labels):
+        raise ValueError(f"em_labels and true_labels must have same length, got {len(em_labels)} and {len(true_labels)}")
+    
+    n_em_clusters = len(np.unique(em_labels))
+    n_true_clusters = len(np.unique(true_labels))
+    n_clusters = max(n_em_clusters, n_true_clusters)
+    
+    # Build confusion matrix: cost[i, j] = number of patients with em_label=i and true_label=j
+    # We want to maximize agreement, so we use negative counts as costs
+    cost_matrix = np.zeros((n_clusters, n_clusters))
+    for i in range(n_clusters):
+        for j in range(n_clusters):
+            # Count how many patients have em_label=i and true_label=j
+            mask = (em_labels == i) & (true_labels == j)
+            cost_matrix[i, j] = -np.sum(mask)  # Negative because we want to maximize
+    
+    # Use Hungarian algorithm to find optimal assignment
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Create mapping from EM labels to true labels
+    label_mapping = np.zeros(n_clusters, dtype=int)
+    for em_idx, true_idx in zip(row_ind, col_ind):
+        label_mapping[em_idx] = true_idx
+    
+    # Remap EM labels
+    remapped_labels = label_mapping[em_labels]
+    
+    return remapped_labels
+
+
+def _z(x):
+    """Z-score normalization helper function."""
+    x = np.asarray(x, float)
+    m = np.nanmean(x)
+    s = np.nanstd(x)
+    return (x - m) / (s if np.isfinite(s) and s > 0 else 1.0)
+
+
+def build_severity_index(df: pd.DataFrame = None, cog: np.ndarray = None) -> np.ndarray:
+    """
+    Build a severity index from clinical scores.
+    
+    Works for both real data (with MCATOT, TD_score, PIGD_score) and synthetic data
+    (with cognitive_score). For real data, higher severity = worse (lower MoCA, higher TD/PIGD).
+    For synthetic data, uses cognitive_score directly.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame, optional
+        DataFrame with clinical scores. Must have either:
+        - For real data: "MCATOT", "TD_score", "PIGD_score" columns
+        - For synthetic data: "cognitive_score" column
+    cog : np.ndarray, optional
+        Alternative input: array of cognitive scores (for synthetic data).
+        If provided, df is ignored.
+    
+    Returns
+    -------
+    np.ndarray
+        Severity index (higher = worse/later disease stage)
+    """
+    if cog is not None:
+        # Synthetic data: use cognitive_score directly
+        # For synthetic data, higher cognitive_score typically means later disease
+        # We negate it to make higher = worse (consistent with real data)
+        cog_array = np.asarray(cog, float)
+        return -_z(cog_array)
+    
+    if df is None:
+        raise ValueError("Either df or cog must be provided")
+    
+    # Check if this is real data (has MCATOT, TD_score, PIGD_score)
+    if all(col in df.columns for col in ["MCATOT", "TD_score", "PIGD_score"]):
+        moca = _z(df["MCATOT"].to_numpy())        # higher is better
+        td = _z(df["TD_score"].to_numpy())
+        pigd = _z(df["PIGD_score"].to_numpy())
+        S = (-moca + td + pigd) / 3.0             # higher = worse / later
+        return S
+    # Check if this is synthetic data (has cognitive_score)
+    elif "cognitive_score" in df.columns:
+        cog_array = df["cognitive_score"].to_numpy()
+        return -_z(cog_array)  # Negate to make higher = worse
+    else:
+        raise ValueError(
+            "df must contain either (MCATOT, TD_score, PIGD_score) for real data "
+            "or 'cognitive_score' for synthetic data"
+        )
+
+
+def fit_mixedlm_beta_from_clinical(df: pd.DataFrame = None, ids: np.ndarray = None, 
+                                   dt: np.ndarray = None, t_max: float = 30,
+                                   cog: np.ndarray = None, verbose: bool = False,
+                                   rng: np.random.Generator = None) -> tuple:
+    """
+    Initialize beta values from clinical scores using mixed-effects linear model.
+    
+    Works for both real data (with MCATOT, TD_score, PIGD_score) and synthetic data
+    (with cognitive_score). Fits a mixed-effects model: severity ~ dt + (1|id)
+    and uses random intercepts to estimate patient-specific beta values.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame, optional
+        DataFrame with clinical scores and time information.
+        Must have columns: patient id, dt (or time), and clinical scores.
+    ids : np.ndarray, optional
+        Patient IDs (required if df not provided)
+    dt : np.ndarray, optional
+        Time since first visit (required if df not provided)
+    t_max : float
+        Maximum time value for clipping beta
+    cog : np.ndarray, optional
+        Cognitive scores array (for synthetic data, alternative to df)
+    verbose : bool
+        Whether to print summary statistics
+    rng : np.random.Generator, optional
+        Random number generator for jitter
+    
+    Returns
+    -------
+    tuple
+        (initial_beta, pid_to_beta, result)
+        initial_beta : np.ndarray of beta values indexed by unique patient IDs
+        pid_to_beta : dict mapping patient ID to beta value
+        result : fitted model result (or None if failed)
+    """
+    if rng is None:
+        rng = np.random.default_rng(0)
+    
+    # Build severity index
+    if df is not None:
+        S = build_severity_index(df=df)
+        if ids is None:
+            # Try to infer from df
+            if "patient_id" in df.columns:
+                ids = df["patient_id"].to_numpy()
+            elif "subj_id" in df.columns:
+                ids = df["subj_id"].to_numpy()
+            else:
+                raise ValueError("Cannot infer ids from df. Please provide ids parameter.")
+        if dt is None:
+            if "dt" in df.columns:
+                dt = df["dt"].to_numpy()
+            elif "time" in df.columns:
+                dt = df["time"].to_numpy()
+            else:
+                raise ValueError("Cannot infer dt from df. Please provide dt parameter.")
+    elif cog is not None and ids is not None and dt is not None:
+        S = build_severity_index(cog=cog)
+    else:
+        raise ValueError("Must provide either (df) or (ids, dt, cog)")
+    
+    # Create DataFrame for mixed model
+    dfm = pd.DataFrame({"id": ids, "dt": dt.astype(float), "S": S})
+    
+    # Keep longitudinal subjects (at least 2 observations)
+    good_ids = dfm.groupby("id").size().pipe(lambda s: s[s >= 2]).index
+    dfm = dfm[dfm["id"].isin(good_ids)].copy()
+    
+    # Clean + tiny jitter on dt to avoid exact duplicate rows
+    dfm = dfm.replace([np.inf, -np.inf], np.nan).dropna(subset=["id", "dt", "S"])
+    dfm["dt"] = dfm["dt"] + 1e-6 * rng.standard_normal(len(dfm))
+    
+    # Fit: severity ~ dt + (1|id)
+    model = smf.mixedlm("S ~ dt", data=dfm, groups=dfm["id"], re_formula="1")
+    result = None
+    for meth in ("bfgs", "nm"):
+        try:
+            result = model.fit(method=meth, reml=True, maxiter=500, disp=False)
+            if result.converged:
+                break
+        except:
+            continue
+    
+    # Get slope k (fixed effect of dt)
+    if result is not None and result.converged:
+        k = float(result.params.get("dt", np.nan))
+    else:
+        # Fallback OLS for slope if MixedLM fails
+        ols = smf.ols("S ~ dt", data=dfm).fit()
+        k = float(ols.params.get("dt", np.nan))
+    
+    if not np.isfinite(k) or abs(k) < 1e-8:
+        # if slope is (near) zero, default to small positive slope to avoid blow-up
+        if verbose:
+            print("[MixedLM] slope near zero; using fallback k=1.0")
+        k = 1.0
+    
+    # Random intercepts u_i
+    re = {}
+    if result is not None and hasattr(result, "random_effects"):
+        re = {pid: float(eff.get("Group", 0.0)) for pid, eff in result.random_effects.items()}
+    
+    unique_ids = np.unique(ids)
+    beta_raw = np.array([re.get(pid, 0.0) / k for pid in unique_ids], dtype=float)
+    
+    # shift & clip: make the smallest beta zero, cap at t_max
+    beta_shift = beta_raw - np.nanmin(beta_raw)
+    initial_beta = np.clip(beta_shift, 0.0, t_max)
+    
+    pid_to_beta = {pid: initial_beta[i] for i, pid in enumerate(unique_ids)}
+    
+    if verbose:
+        print("β_init summary:", pd.Series(initial_beta).describe())
+    
+    return initial_beta, pid_to_beta, result

@@ -394,6 +394,28 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         self.final_s = current_s
         self.final_assignments = assignments
         
+        # Match EM labels to true labels if available
+        # Check if X contains true subtype labels
+        if X is not None and len(X) > 0 and "subtype_true" in X[0]:
+            true_labels = np.array([p.get("subtype_true", -1) for p in X])
+            if np.all(true_labels >= 0):  # Only match if all have valid true labels
+                try:
+                    self.final_assignments_matched = match_labels_best_overlap(
+                        assignments, true_labels
+                    )
+                    self.label_mapping_applied = True
+                except Exception as e:
+                    if self.verbose >= 1:
+                        print(f"Warning: Could not match labels: {e}")
+                    self.final_assignments_matched = assignments.copy()
+                    self.label_mapping_applied = False
+            else:
+                self.final_assignments_matched = assignments.copy()
+                self.label_mapping_applied = False
+        else:
+            self.final_assignments_matched = assignments.copy()
+            self.label_mapping_applied = False
+        
         # Store representative theta (first cluster)
         self.theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [cluster_scalar_K[0]]])
         self.cog_a = self.cog_regression_history[:-1, -1]
