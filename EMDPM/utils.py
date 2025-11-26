@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.integrate import solve_ivp
 from scipy.optimize import linear_sum_assignment
 import statsmodels.formula.api as smf
+from typing import Sequence
 
 def solve_system(x0: np.ndarray, f: np.ndarray, K: np.ndarray, t_span: np.ndarray, scalar_K: float = 1.0) -> np.ndarray: #, alpha: float = 1.0) -> np.ndarray:
     """
@@ -135,6 +136,108 @@ def ensure_2d_cog(c, n_rows_expected: int) -> np.ndarray:
     return c
 
 
+def get_subtype_mapping_from_f(
+    fitted_f_list: Sequence[np.ndarray],
+    true_f_list: Sequence[np.ndarray],
+) -> np.ndarray:
+    """
+    Create a mapping from fitted subtype indices to true subtype indices based on f parameters.
+    
+    Uses Hungarian algorithm to find the best match between fitted and true subtypes
+    based on Euclidean distance between f vectors. Returns an array where index = fitted subtype, 
+    value = corresponding true subtype.
+    
+    Parameters
+    ----------
+    fitted_f_list : Sequence[np.ndarray]
+        List of fitted f arrays, one per subtype. Each should be shape (n_biomarkers,).
+    true_f_list : Sequence[np.ndarray]
+        List of true f arrays, one per subtype. Each should be shape (n_biomarkers,).
+    
+    Returns
+    -------
+    np.ndarray
+        Mapping array where mapping[fitted_subtype] = true_subtype
+        Shape: (n_subtypes,)
+    """
+    fitted_f_list = [np.asarray(f) for f in fitted_f_list]
+    true_f_list = [np.asarray(f) for f in true_f_list]
+    
+    n_fitted = len(fitted_f_list)
+    n_true = len(true_f_list)
+    n_subtypes = max(n_fitted, n_true)
+    
+    # Build cost matrix: cost[i, j] = Euclidean distance between fitted_f[i] and true_f[j]
+    cost_matrix = np.zeros((n_subtypes, n_subtypes))
+    for i in range(n_fitted):
+        for j in range(n_true):
+            # Compute Euclidean distance between f vectors
+            cost_matrix[i, j] = np.linalg.norm(fitted_f_list[i] - true_f_list[j])
+    
+    # Use Hungarian algorithm to find optimal assignment (minimize total distance)
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Create mapping: mapping[fitted_subtype] = true_subtype
+    mapping = np.zeros(n_subtypes, dtype=int)
+    for fitted_idx, true_idx in zip(row_ind, col_ind):
+        mapping[fitted_idx] = true_idx
+    
+    return mapping
+
+
+def get_subtype_mapping(fitted_assignments: np.ndarray, true_assignments: np.ndarray) -> np.ndarray:
+    """
+    Create a mapping from fitted subtype indices to true subtype indices.
+    
+    Uses Hungarian algorithm to find the best match between fitted and true subtypes
+    based on patient overlap. Returns an array where index = fitted subtype, 
+    value = corresponding true subtype.
+    
+    Parameters
+    ----------
+    fitted_assignments : np.ndarray
+        Subtype assignments from fitted model (shape: n_patients,)
+    true_assignments : np.ndarray
+        True subtype assignments (shape: n_patients,)
+    
+    Returns
+    -------
+    np.ndarray
+        Mapping array where mapping[fitted_subtype] = true_subtype
+        Shape: (n_subtypes,)
+    """
+    fitted_assignments = np.asarray(fitted_assignments)
+    true_assignments = np.asarray(true_assignments)
+    
+    if len(fitted_assignments) != len(true_assignments):
+        raise ValueError(
+            f"fitted_assignments and true_assignments must have same length, "
+            f"got {len(fitted_assignments)} and {len(true_assignments)}"
+        )
+    
+    n_fitted = len(np.unique(fitted_assignments))
+    n_true = len(np.unique(true_assignments))
+    n_subtypes = max(n_fitted, n_true)
+    
+    # Build confusion matrix: cost[i, j] = number of patients with fitted=i and true=j
+    # We want to maximize agreement, so we use negative counts as costs
+    cost_matrix = np.zeros((n_subtypes, n_subtypes))
+    for i in range(n_subtypes):
+        for j in range(n_subtypes):
+            mask = (fitted_assignments == i) & (true_assignments == j)
+            cost_matrix[i, j] = -np.sum(mask)  # Negative because we want to maximize
+    
+    # Use Hungarian algorithm to find optimal assignment
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Create mapping: mapping[fitted_subtype] = true_subtype
+    mapping = np.zeros(n_subtypes, dtype=int)
+    for fitted_idx, true_idx in zip(row_ind, col_ind):
+        mapping[fitted_idx] = true_idx
+    
+    return mapping
+
+
 def match_labels_best_overlap(em_labels: np.ndarray, true_labels: np.ndarray) -> np.ndarray:
     """
     Match EM-assigned labels to true labels based on best overlap using Hungarian algorithm.
@@ -186,6 +289,68 @@ def match_labels_best_overlap(em_labels: np.ndarray, true_labels: np.ndarray) ->
     remapped_labels = label_mapping[em_labels]
     
     return remapped_labels
+
+
+def print_parameter_comparison(
+    fitted_f_list: Sequence[np.ndarray],
+    fitted_scalar_K_list: Sequence[float],
+    fitted_s: np.ndarray,
+    true_f_list: Sequence[np.ndarray],
+    true_scalar_K_list: Sequence[float],
+    true_s: np.ndarray,
+    subtype_mapping: np.ndarray = None,
+    n_subtypes: int = None,
+):
+    """
+    Print a comparison of fitted vs true parameters (f, scalar_K, s).
+    
+    Parameters
+    ----------
+    fitted_f_list : Sequence[np.ndarray]
+        List of fitted f arrays, one per subtype.
+    fitted_scalar_K_list : Sequence[float]
+        List of fitted scalar_K values, one per subtype.
+    fitted_s : np.ndarray
+        Fitted global s array.
+    true_f_list : Sequence[np.ndarray]
+        List of true f arrays, one per subtype.
+    true_scalar_K_list : Sequence[float]
+        List of true scalar_K values, one per subtype.
+    true_s : np.ndarray
+        True global s array.
+    subtype_mapping : np.ndarray, optional
+        Mapping array where mapping[fitted_subtype] = true_subtype.
+        If None, assumes fitted subtype i corresponds to true subtype i.
+    n_subtypes : int, optional
+        Number of subtypes. If None, inferred from fitted_f_list.
+    """
+    if n_subtypes is None:
+        n_subtypes = len(fitted_f_list)
+    
+    if subtype_mapping is None:
+        subtype_mapping = np.arange(n_subtypes)
+    
+    
+    # Compare f and scalar_K by subtype
+    for fitted_subtype in range(n_subtypes):
+        true_subtype = subtype_mapping[fitted_subtype]
+        f_fitted = np.asarray(fitted_f_list[fitted_subtype])
+        f_true = np.asarray(true_f_list[true_subtype])
+        scalar_K_fitted = fitted_scalar_K_list[fitted_subtype]
+        scalar_K_true = true_scalar_K_list[true_subtype]
+        
+        f_error = np.mean(np.abs(f_fitted - f_true))
+        scalar_K_error = np.abs(scalar_K_fitted - scalar_K_true)
+        
+        print(f"\nFitted Subtype {fitted_subtype} -> True Subtype {true_subtype}:")
+        print(f"  f_fitted:      {f_fitted}")
+        print(f"  f_true:        {f_true}")
+        print(f"  scalar_K_fitted: {scalar_K_fitted:.6f}")
+        print(f"  scalar_K_true:   {scalar_K_true:.6f}")
+    
+    # Compare global s
+    print(f"  s_fitted:      {fitted_s}")
+    print(f"  s_true:        {true_s}")
 
 
 def _z(x):

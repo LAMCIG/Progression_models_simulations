@@ -30,6 +30,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                  
                  # [initial guesses]
                  initial_f: np.ndarray = None, 
+                 initial_assignments: np.ndarray = None,
                  # initial_s
                  # initial_s_K
                  
@@ -63,6 +64,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         # [initial guesses]
         self.initial_f = initial_f
+        self.initial_assignments = initial_assignments
         
         # [fitting params]
         self.jac_toggle = jac_toggle
@@ -209,8 +211,20 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 cluster_f.append(rng.uniform(0, 0.1, size=n_biomarkers))
             cluster_scalar_K.append(initial_scalar_K * rng.uniform(0.8, 1.2))
         
-        # Initialize cluster assignments (random for now)
-        assignments = rng.integers(0, self.n_subtypes, size=n_patients)
+        # Initialize cluster assignments (use provided or random)
+        if self.initial_assignments is not None:
+            if len(self.initial_assignments) != n_patients:
+                raise ValueError(
+                    f"initial_assignments length ({len(self.initial_assignments)}) "
+                    f"must match number of patients ({n_patients})"
+                )
+            if np.any(self.initial_assignments < 0) or np.any(self.initial_assignments >= self.n_subtypes):
+                raise ValueError(
+                    f"initial_assignments must be in range [0, {self.n_subtypes})"
+                )
+            assignments = self.initial_assignments.copy()
+        else:
+            assignments = rng.integers(0, self.n_subtypes, size=n_patients)
         
         # Store assignment history
         assignment_history = np.zeros((n_patients, self.max_iter + 1), dtype=int)
@@ -222,7 +236,11 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         if self.verbose >= 1:
             pbar = tqdm(total=self.max_iter)
         else:
-            pbar = range(self.max_iter)
+            # Create a dummy progress bar that does nothing
+            class DummyProgressBar:
+                def update(self, n=1):
+                    pass
+            pbar = DummyProgressBar()
             
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
@@ -393,6 +411,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         self.cluster_scalar_K = cluster_scalar_K
         self.final_s = current_s
         self.final_assignments = assignments
+        self.subtype_mapping = None  # Will be set if compute_subtype_mapping is called
         
         # Match EM labels to true labels if available
         # Check if X contains true subtype labels
@@ -476,6 +495,25 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         return assignments
     
+    def compute_subtype_mapping(self, true_f_list, verbose=True):
+        """
+        Compute subtype mapping based on fitted f vs true f parameters.
+        
+        Parameters
+        ----------
+        true_f_list : Sequence[np.ndarray]
+            List of true f arrays, one per subtype.
+        verbose : bool
+            Whether to print the mapping.
+        """
+        from .utils import get_subtype_mapping_from_f
+        self.subtype_mapping = get_subtype_mapping_from_f(self.cluster_f, true_f_list)
+        if verbose:
+            print(f"\nSubtype mapping (fitted -> true): {self.subtype_mapping}")
+            for fitted_subtype in range(self.n_subtypes):
+                print(f"  Fitted subtype {fitted_subtype} -> True subtype {self.subtype_mapping[fitted_subtype]}")
+        return self.subtype_mapping
+    
     def transform(self, X: list[dict]) -> np.ndarray:
         """
         Estimate beta values for a list of patient dicts.
@@ -554,4 +592,121 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 f"cog shape mismatch; expected first dim {n_rows_expected}, got {c.shape}"
             )
         return c
+
+
+def fit_subtyping_em_with_assignments(
+    X: list,
+    initial_assignments: np.ndarray,
+    em_kwargs: dict,
+    run_index: int = 0,
+    seed_offset: int = 0
+):
+    """
+    Fit a SubtypingEM model with a specific initial assignment.
+    Designed to be called in parallel.
+    
+    Parameters
+    ----------
+    X : list
+        List of patient dictionaries
+    initial_assignments : np.ndarray
+        Initial cluster assignments for each patient
+    em_kwargs : dict
+        Keyword arguments to pass to SubtypingEM constructor
+    run_index : int
+        Index of this run (for RNG seeding)
+    seed_offset : int
+        Base seed offset for RNG
+    
+    Returns
+    -------
+    dict
+        Dictionary containing the fitted model and results
+    """
+    rng = np.random.default_rng(75 + seed_offset + run_index)
+    
+    # Create a copy of em_kwargs and add rng and initial_assignments
+    kwargs = em_kwargs.copy()
+    kwargs['rng'] = rng
+    kwargs['initial_assignments'] = initial_assignments
+    
+    em = SubtypingEM(**kwargs)
+    em.fit(X=X, y=None)
+    
+    result = {
+        'run_index': run_index,
+        'model': em,
+        'beta_history': em.beta_history,
+        'lse_history': em.lse_history,
+        'assignment_history': em.assignment_history,
+        'final_assignments': em.final_assignments,
+        'initial_assignments': initial_assignments,
+        'final_lse': em.lse_history[-1] if len(em.lse_history) > 0 else np.inf,
+    }
+    
+    return result
+
+
+def run_multiple_initializations_parallel(
+    X: list,
+    n_initializations: int,
+    em_kwargs: dict,
+    n_jobs: int = -1,
+    prefer: str = "processes",
+    seed_offset: int = 0,
+    rng: np.random.Generator = None
+):
+    """
+    Run multiple SubtypingEM fits with different random initial assignments in parallel.
+    
+    Parameters
+    ----------
+    X : list
+        List of patient dictionaries
+    n_initializations : int
+        Number of different initializations to try
+    em_kwargs : dict
+        Keyword arguments to pass to SubtypingEM constructor
+    n_jobs : int
+        Number of parallel jobs (-1 for all cores)
+    prefer : str
+        Preferred backend: "processes" or "threads"
+    seed_offset : int
+        Base seed offset for RNG
+    rng : np.random.Generator, optional
+        Random number generator for creating initial assignments
+        
+    Returns
+    -------
+    list
+        List of result dictionaries, one per initialization
+    """
+    from joblib import Parallel, delayed
+    
+    n_patients = len(X)
+    n_subtypes = em_kwargs.get('n_subtypes', 2)
+    
+    if rng is None:
+        rng = np.random.default_rng(75 + seed_offset)
+    
+    # Generate random initial assignments for each run
+    initial_assignments_list = [
+        rng.integers(0, n_subtypes, size=n_patients)
+        for _ in range(n_initializations)
+    ]
+    
+    # Create jobs
+    jobs = []
+    for idx, assignments in enumerate(initial_assignments_list):
+        jobs.append(delayed(fit_subtyping_em_with_assignments)(
+            X, assignments, em_kwargs, run_index=idx, seed_offset=seed_offset
+        ))
+    
+    # Run in parallel
+    results = Parallel(n_jobs=n_jobs, prefer=prefer)(jobs)
+    
+    # Find best result by final LSE
+    best_idx = np.argmin([r['final_lse'] for r in results])
+    
+    return results, best_idx
 
