@@ -7,6 +7,7 @@ from .optimizer_theta_globals import fit_theta_globals
 from .optimizer_theta_cluster import fit_theta_cluster
 from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
+from .kernel_jsd import KernelJSD
 from .utils import *
 
 class SubtypingEM(BaseEstimator, TransformerMixin):
@@ -23,10 +24,11 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                  K: np.ndarray = None,
                  rng: np.random.Generator = None,
                  
-                 # [hyperparameters]
-                 lambda_f: float = 0.01,
-                 lambda_cog: float = 0,
-                 lambda_scalar: float = 0.0,
+                # [hyperparameters]
+                lambda_f: float = 0.01,
+                lambda_cog: float = 0,
+                lambda_scalar: float = 0.0,
+                lambda_jsd: float = 0.0,  # JSD regularization for beta separation
                  
                  # [initial guesses]
                  initial_f: np.ndarray = None, 
@@ -61,6 +63,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         self.lambda_f = lambda_f
         self.lambda_cog = lambda_cog
         self.lambda_scalar = lambda_scalar
+        self.lambda_jsd = lambda_jsd
         
         # [initial guesses]
         self.initial_f = initial_f
@@ -355,6 +358,19 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 lse += res
                 
                 current_beta[idx] = beta_i
+            
+            # Apply JSD regularization AFTER beta estimation (STEP 4)
+            # This maximizes distance between JSD application and next beta re-optimization:
+            # - JSD applied here at end of iteration N
+            # - Next iteration: STEP 1 (global s), STEP 2 (assignments), STEP 3 (cluster params) 
+            # - Then STEP 4 (beta estimation) happens - maximum steps away from JSD
+            # This gives JSD effect time to influence assignments and cluster parameters
+            # before betas are re-optimized
+            if self.lambda_jsd > 0 and self.n_subtypes == 2:
+                current_beta = self._apply_jsd_regularization(
+                    current_beta, assignments, self.t_max, loop_iter
+                )
+            
             beta_history[:, hist_idx] = current_beta
             
             # Store cluster parameters in history (for first cluster as representative)
@@ -494,6 +510,82 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             assignments[idx] = best_subtype
         
         return assignments
+    
+    def _apply_jsd_regularization(self, beta, assignments, t_max, iteration=None):
+        """
+        Apply JSD regularization to prevent beta values from clumping.
+        Encourages separation between subtypes by maximizing JSD.
+        
+        Parameters
+        ----------
+        beta : np.ndarray
+            Current beta values for all patients
+        assignments : np.ndarray
+            Subtype assignments for each patient
+        t_max : float
+            Maximum time value (for bounds)
+        iteration : int, optional
+            Current iteration number for verbose output
+        
+        Returns
+        -------
+        np.ndarray
+            Regularized beta values
+        """
+        if self.n_subtypes != 2:
+            return beta
+        
+        # Extract betas for each subtype
+        subtype_0_betas = beta[assignments == 0]
+        subtype_1_betas = beta[assignments == 1]
+        
+        if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
+            return beta
+        
+        # Compute JSD and derivatives
+        jsd_calc = KernelJSD(
+            alpha=subtype_0_betas,
+            beta=subtype_1_betas,
+            value_range=(0, t_max)
+        )
+        
+        # Compute current JSD value for monitoring (JSD is symmetric, order doesn't matter)
+        jsd_before = jsd_calc.jsd()
+        d_alpha, d_beta = jsd_calc.jsd_derivatives()
+        
+        # Apply gradient step to maximize JSD (encourage separation)
+        # Step size: scale with lambda_jsd
+        # The derivatives from JSD can be quite small due to normalization in density estimation
+        # So we scale by lambda_jsd directly - with lambda_jsd=100, this gives step_size = 100 * 0.1 = 10
+        step_size = self.lambda_jsd * 0.1
+        
+        beta_regularized = beta.copy()
+        idx_subtype_0 = np.where(assignments == 0)[0]
+        idx_subtype_1 = np.where(assignments == 1)[0]
+        
+        # Apply step to maximize JSD (gradients point in direction to increase JSD)
+        # For subtype 0: move in direction of d_alpha to increase JSD
+        # For subtype 1: move in direction of d_beta to increase JSD
+        beta_regularized[idx_subtype_0] += step_size * d_alpha
+        beta_regularized[idx_subtype_1] += step_size * d_beta
+        
+        # Clip to valid range
+        beta_regularized = np.clip(beta_regularized, 0, t_max)
+        
+        # Verify JSD increased (optional diagnostic)
+        if self.verbose >= 2 and iteration is not None and iteration % 10 == 0:
+            # Recompute JSD after regularization to check improvement
+            jsd_after_calc = KernelJSD(
+                alpha=beta_regularized[idx_subtype_0],
+                beta=beta_regularized[idx_subtype_1],
+                value_range=(0, t_max)
+            )
+            jsd_after = jsd_after_calc.jsd()
+            beta_change = np.mean(np.abs(beta_regularized - beta))
+            print(f"  Iter {iteration}: JSD before={jsd_before:.6f}, after={jsd_after:.6f}, "
+                  f"mean beta change={beta_change:.6f}, n_bins={jsd_calc.n_bins}")
+        
+        return beta_regularized
     
     def compute_subtype_mapping(self, true_f_list, verbose=True):
         """
