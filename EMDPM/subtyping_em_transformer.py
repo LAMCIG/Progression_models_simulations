@@ -5,7 +5,7 @@ from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
 from .optimizer_theta_globals import fit_theta_globals
 from .optimizer_theta_cluster import fit_theta_cluster
-from .optimizer_beta import estimate_beta_for_patient, beta_loss, beta_loss_jac
+from .optimizer_beta import estimate_beta_for_patient, estimate_beta, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
 from .kernel_jsd import KernelJSD
 from .utils import *
@@ -318,58 +318,25 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 cluster_scalar_K[subtype] = scalar_K_cluster
             
             ## STEP 4: SUBJECT LEVEL BETA --> update beta using cluster-level theta
-            lse = 0.0
-            for idx, patient_id in enumerate(np.unique(ids)):
-                mask = (ids == patient_id)
-                X_obs_i = X_obs[mask, :]  # (n_obs_i, n_biomarkers)
-                dt_i = dt[mask]  # (n_obs_i,)
-                cog_i = cog[mask, :]  # (n_obs_i, n_cog_features)
-                beta_i = current_beta[idx]
-                
-                # get the cluster assignment for this patient
-                subtype_i = assignments[idx]
-                f_cluster_i = np.ravel(cluster_f[subtype_i])  # Ensure 1D
-                scalar_K_cluster_i = cluster_scalar_K[subtype_i]
-                
-                # build cluster-specific theta and X_pred
-                theta_cluster_i = np.concatenate([f_cluster_i, current_s, [scalar_K_cluster_i]])
-                X_pred_cluster_i = solve_system(np.zeros(n_biomarkers), f_cluster_i, K, self.t_span, scalar_K_cluster_i)
-                
-                # update beta using cluster-specific parameters
-                beta_i = estimate_beta_for_patient(
-                    beta_i=beta_i, X_obs_i=X_obs_i, dt_i=dt_i,
-                    X_pred=X_pred_cluster_i, t_span=self.t_span,
-                    cog_i=cog_i, cog_a=current_cog_a, cog_b=current_cog_b,
-                    theta=theta_cluster_i, K=K, lambda_cog=self.lambda_cog,
-                    use_jacobian=current_jac, t_max=self.t_max
-                )
-                
-                # Compute loss for this patient
-                if current_jac:
-                    res, _ = beta_loss_jac(
-                        beta_i, X_obs_i, dt_i, X_pred_cluster_i, self.t_span,
-                        cog_i, current_cog_a, current_cog_b, theta_cluster_i, K, self.lambda_cog
-                    )
-                else:
-                    res = beta_loss(
-                        beta_i, X_obs_i, dt_i, X_pred_cluster_i, self.t_span,
-                        cog_i, current_cog_a, current_cog_b, theta_cluster_i, self.lambda_cog
-                    )
-                lse += res
-                
-                current_beta[idx] = beta_i
-            
-            # Apply JSD regularization AFTER beta estimation (STEP 4)
-            # This maximizes distance between JSD application and next beta re-optimization:
-            # - JSD applied here at end of iteration N
-            # - Next iteration: STEP 1 (global s), STEP 2 (assignments), STEP 3 (cluster params) 
-            # - Then STEP 4 (beta estimation) happens - maximum steps away from JSD
-            # This gives JSD effect time to influence assignments and cluster parameters
-            # before betas are re-optimized
-            if self.lambda_jsd > 0 and self.n_subtypes == 2:
-                current_beta = self._apply_jsd_regularization(
-                    current_beta, assignments, self.t_max, loop_iter
-                )
+            # Vectorized optimization of all betas simultaneously with JSD included
+            current_beta, lse = estimate_beta(
+                beta_all=current_beta,
+                X_obs=X_obs,
+                dt=dt,
+                ids=ids,
+                cog=cog,
+                t_span=self.t_span,
+                cluster_f=cluster_f,
+                cluster_scalar_K=cluster_scalar_K,
+                s=current_s,
+                assignments=assignments,
+                K=K,
+                cog_a=current_cog_a,
+                cog_b=current_cog_b,
+                lambda_cog=self.lambda_cog,
+                lambda_jsd=self.lambda_jsd,
+                t_max=self.t_max
+            )
             
             beta_history[:, hist_idx] = current_beta
             
@@ -510,16 +477,61 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             assignments[idx] = best_subtype
         
         return assignments
+
+
+    def _update_assignments_likelihood(self, X_obs, dt, ids, cog, beta, cluster_f, 
+                                   cluster_scalar_K, s, K, t_span, cog_a, cog_b, 
+                                   lambda_cog, error_scale=1.0):
+        """Probabilistic assignments assuming Gaussian error distribution."""
+        n_patients = len(np.unique(ids))
+        n_subtypes = len(cluster_f)
+        probabilities = np.zeros((n_patients, n_subtypes))
+        
+        unique_ids = np.unique(ids)
+        
+        for idx, patient_id in enumerate(unique_ids):
+            mask = (ids == patient_id)
+            X_obs_i = X_obs[mask, :]
+            dt_i = dt[mask]
+            cog_i = cog[mask, :]
+            beta_i = beta[idx]
+            
+            log_likelihoods = np.zeros(n_subtypes)
+            
+            for subtype in range(n_subtypes):
+                f_cluster = np.ravel(cluster_f[subtype])
+                scalar_K_cluster = cluster_scalar_K[subtype]
+                theta_cluster = np.concatenate([f_cluster, s, [scalar_K_cluster]])
+                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K_cluster)
+                
+                error = beta_loss(
+                    beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
+                    cog_i, cog_a, cog_b, theta_cluster, lambda_cog
+                )
+                
+                # Gaussian log-likelihood: -0.5 * (error/scale)^2
+                log_likelihoods[subtype] = -0.5 * (error / error_scale) ** 2
+            
+            # Convert to probabilities (with numerical stability)
+            log_likelihoods -= np.max(log_likelihoods)
+            probabilities[idx] = np.exp(log_likelihoods)
+            probabilities[idx] /= np.sum(probabilities[idx])
+        
+            assignments = np.argmax(probabilities, axis=1)
+            return assignments, probabilities
     
-    def _apply_jsd_regularization(self, beta, assignments, t_max, iteration=None):
+    def _optimize_jsd_redistribution(self, beta, assignments, t_max, iteration=None):
         """
-        Apply JSD regularization to prevent beta values from clumping.
-        Encourages separation between subtypes by maximizing JSD.
+        Optimize JSD redistribution using gradient descent (multiple steps).
+        This is called AFTER all betas are optimized to redistribute them based on JSD.
+        
+        Much faster than computing JSD thousands of times during individual beta optimization.
+        Does actual optimization (multiple gradient steps) rather than just one step.
         
         Parameters
         ----------
         beta : np.ndarray
-            Current beta values for all patients
+            Current beta values for all patients (already optimized for reconstruction)
         assignments : np.ndarray
             Subtype assignments for each patient
         t_max : float
@@ -530,7 +542,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         Returns
         -------
         np.ndarray
-            Regularized beta values
+            Redistributed beta values
         """
         if self.n_subtypes != 2:
             return beta
@@ -542,50 +554,60 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
             return beta
         
-        # Compute JSD and derivatives
-        jsd_calc = KernelJSD(
-            alpha=subtype_0_betas,
-            beta=subtype_1_betas,
-            value_range=(0, t_max)
-        )
-        
-        # Compute current JSD value for monitoring (JSD is symmetric, order doesn't matter)
-        jsd_before = jsd_calc.jsd()
-        d_alpha, d_beta = jsd_calc.jsd_derivatives()
-        
-        # Apply gradient step to maximize JSD (encourage separation)
-        # Step size: scale with lambda_jsd
-        # The derivatives from JSD can be quite small due to normalization in density estimation
-        # So we scale by lambda_jsd directly - with lambda_jsd=100, this gives step_size = 100 * 0.1 = 10
-        step_size = self.lambda_jsd * 0.1
-        
-        beta_regularized = beta.copy()
         idx_subtype_0 = np.where(assignments == 0)[0]
         idx_subtype_1 = np.where(assignments == 1)[0]
         
-        # Apply step to maximize JSD (gradients point in direction to increase JSD)
-        # For subtype 0: move in direction of d_alpha to increase JSD
-        # For subtype 1: move in direction of d_beta to increase JSD
-        beta_regularized[idx_subtype_0] += step_size * d_alpha
-        beta_regularized[idx_subtype_1] += step_size * d_beta
+        beta_optimized = beta.copy()
+        jsd_before = None
         
-        # Clip to valid range
-        beta_regularized = np.clip(beta_regularized, 0, t_max)
+        # Do multiple gradient descent steps to optimize JSD
+        n_jsd_steps = max(1, int(self.lambda_jsd * 0.1)) 
         
-        # Verify JSD increased (optional diagnostic)
+        for step in range(n_jsd_steps):
+            # Extract current betas for each subtype
+            subtype_0_current = beta_optimized[idx_subtype_0]
+            subtype_1_current = beta_optimized[idx_subtype_1]
+            
+            # Compute JSD and derivatives
+            jsd_calc = KernelJSD(
+                alpha=subtype_0_current,
+                beta=subtype_1_current,
+                value_range=(0, t_max)
+            )
+            
+            if step == 0:
+                jsd_before = jsd_calc.jsd()
+            
+            d_alpha, d_beta = jsd_calc.jsd_derivatives()
+            
+            # Adaptive step size - normalize gradients to prevent overshooting
+            grad_norm_alpha = np.linalg.norm(d_alpha) if len(d_alpha) > 0 else 1.0
+            grad_norm_beta = np.linalg.norm(d_beta) if len(d_beta) > 0 else 1.0
+            
+            # Step size: smaller for later steps (fine-tuning)
+            step_size = self.lambda_jsd * 0.01 * (1.0 / (step + 1))
+                        
+            # Apply gradient step to maximize JSD
+            beta_optimized[idx_subtype_0] += step_size * d_alpha
+            beta_optimized[idx_subtype_1] += step_size * d_beta
+            
+            # Clip to valid range
+            beta_optimized = np.clip(beta_optimized, 0, t_max)
+        
+        # Diagnostic output
         if self.verbose >= 2 and iteration is not None and iteration % 10 == 0:
-            # Recompute JSD after regularization to check improvement
             jsd_after_calc = KernelJSD(
-                alpha=beta_regularized[idx_subtype_0],
-                beta=beta_regularized[idx_subtype_1],
+                alpha=beta_optimized[idx_subtype_0],
+                beta=beta_optimized[idx_subtype_1],
                 value_range=(0, t_max)
             )
             jsd_after = jsd_after_calc.jsd()
-            beta_change = np.mean(np.abs(beta_regularized - beta))
-            print(f"  Iter {iteration}: JSD before={jsd_before:.6f}, after={jsd_after:.6f}, "
-                  f"mean beta change={beta_change:.6f}, n_bins={jsd_calc.n_bins}")
+            beta_change = np.mean(np.abs(beta_optimized - beta))
+            print(f"  Iter {iteration}: JSD opt steps={n_jsd_steps}, "
+                  f"JSD {jsd_before:.6f} -> {jsd_after:.6f}, "
+                  f"mean beta change={beta_change:.6f}")
         
-        return beta_regularized
+        return beta_optimized
     
     def compute_subtype_mapping(self, true_f_list, verbose=True):
         """
