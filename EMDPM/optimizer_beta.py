@@ -21,10 +21,16 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
         return 0.0, 0.0
     
     # Compute JSD and derivatives
+    # Use full range (0, t_max) to avoid cutting off values near t_max
+    # Adjustable parameters:
+    # - n_bins: More bins = finer resolution but can be noisy. Fewer = smoother but less precise.
+    # - bandwidth: Larger = smoother density. Smaller = more peaked. None = auto (Silverman's rule).
     jsd_calc = KernelJSD(
         alpha=subtype_0_betas,
         beta=subtype_1_betas,
-        value_range=(0, t_max)
+        value_range=(0, t_max),  # Fixed: was (0, t_max-1) which cut off upper range
+        n_bins=50,  # Fixed: was bins=40 (wrong parameter name). More bins for better resolution
+        bandwidth=None,  # Auto-compute using Silverman's rule
     )
     
     # JSD loss: we want to MAXIMIZE JSD, so minimize -JSD
@@ -358,10 +364,13 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         subtype_1_betas = beta_all[assignments == 1]
         
         if len(subtype_0_betas) > 0 and len(subtype_1_betas) > 0:
+            # Use same JSD parameters as in _jsd_loss_and_grad for consistency
             jsd_calc = KernelJSD(
                 alpha=subtype_0_betas,
                 beta=subtype_1_betas,
-                value_range=(0, t_max)
+                value_range=(0, t_max),
+                n_bins=50,  # More bins for better resolution
+                bandwidth=None,  # Auto-compute using Silverman's rule
             )
             jsd_value = jsd_calc.jsd()
             jsd_loss = -lambda_jsd * jsd_value

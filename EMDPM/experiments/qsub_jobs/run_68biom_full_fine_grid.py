@@ -162,12 +162,12 @@ model = EM(K=K)
 
 param_grid = {
     "lambda_f": [0.9, 0.95, 1.0, 1.1, 1.2],
-    "lambda_cog": [0.01, 0.025],
+    "lambda_cog": [1e-2, 1e-3],
     "lambda_scalar": [0.1, 0.3, 0.5],
     "jac_toggle": [True],
     "max_iter": [30],
     "t_max": [40],
-    "epsilon": [1e-1],
+    "epsilon": [1e-2],
 }
 
 groups_train = [p["id"] for p in X_train]
