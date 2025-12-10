@@ -4,7 +4,9 @@ from scipy.optimize import minimize
 from .utils import solve_system
 from .kernel_jsd import KernelJSD
 def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndarray, 
-                       patient_idx: int, lambda_jsd: float, t_max: float) -> tuple:
+                       patient_idx: int, lambda_jsd: float, t_max: float,
+                       jsd_n_bins: int = None, jsd_bandwidth: float = None,
+                       jsd_value_range: tuple = None) -> tuple:
 
     if lambda_jsd == 0.0 or len(np.unique(assignments)) != 2:
         return 0.0, 0.0
@@ -20,17 +22,20 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
     if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
         return 0.0, 0.0
     
+    # Determine JSD value range
+    if jsd_value_range is None:
+        jsd_value_range = (0, t_max)
+    
     # Compute JSD and derivatives
-    # Use full range (0, t_max) to avoid cutting off values near t_max
     # Adjustable parameters:
     # - n_bins: More bins = finer resolution but can be noisy. Fewer = smoother but less precise.
     # - bandwidth: Larger = smoother density. Smaller = more peaked. None = auto (Silverman's rule).
     jsd_calc = KernelJSD(
         alpha=subtype_0_betas,
         beta=subtype_1_betas,
-        value_range=(0, t_max),  # Fixed: was (0, t_max-1) which cut off upper range
-        n_bins=50,  # Fixed: was bins=40 (wrong parameter name). More bins for better resolution
-        bandwidth=None,  # Auto-compute using Silverman's rule
+        value_range=jsd_value_range,
+        n_bins=jsd_n_bins,
+        bandwidth=jsd_bandwidth,
     )
     
     # JSD loss: we want to MAXIMIZE JSD, so minimize -JSD
@@ -61,7 +66,9 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
               cog_i: np.ndarray, cog_a: np.ndarray, cog_b: float,
               theta: np.ndarray, lambda_cog: float = 0.0,
               beta_all: np.ndarray = None, assignments: np.ndarray = None,
-              patient_idx: int = None, lambda_jsd: float = 0.0, t_max: float = 12.0) -> float:
+              patient_idx: int = None, lambda_jsd: float = 0.0, t_max: float = 12.0,
+              jsd_n_bins: int = None, jsd_bandwidth: float = None,
+              jsd_value_range: tuple = None) -> float:
     
     """
     Computes the loss for optimizing a single patient's beta_i.
@@ -95,7 +102,8 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     # Add JSD regularization if provided
     jsd_loss = 0.0
     if lambda_jsd > 0 and beta_all is not None and assignments is not None and patient_idx is not None:
-        jsd_loss, _ = _jsd_loss_and_grad(beta_i, beta_all, assignments, patient_idx, lambda_jsd, t_max)
+        jsd_loss, _ = _jsd_loss_and_grad(beta_i, beta_all, assignments, patient_idx, lambda_jsd, t_max,
+                                         jsd_n_bins, jsd_bandwidth, jsd_value_range)
 
     return loss + cog_prior + jsd_loss
     
@@ -105,7 +113,9 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
                   cog_i: np.ndarray, cog_a: np.ndarray, cog_b: float,
                   theta: np.ndarray, K: np.ndarray, lambda_cog: float = 0.0,
                   beta_all: np.ndarray = None, assignments: np.ndarray = None,
-                  patient_idx: int = None, lambda_jsd: float = 0.0, t_max: float = 12.0) -> tuple:
+                  patient_idx: int = None, lambda_jsd: float = 0.0, t_max: float = 12.0,
+                  jsd_n_bins: int = None, jsd_bandwidth: float = None,
+                  jsd_value_range: tuple = None) -> tuple:
     """
     Computes the loss and gradient for optimizing a single patient's beta_i.
 
@@ -182,7 +192,8 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
     
     # Add JSD regularization if provided
     if lambda_jsd > 0 and beta_all is not None and assignments is not None and patient_idx is not None:
-        jsd_loss, jsd_grad = _jsd_loss_and_grad(beta_i, beta_all, assignments, patient_idx, lambda_jsd, t_max)
+        jsd_loss, jsd_grad = _jsd_loss_and_grad(beta_i, beta_all, assignments, patient_idx, lambda_jsd, t_max,
+                                                jsd_n_bins, jsd_bandwidth, jsd_value_range)
         loss += jsd_loss
         grad += jsd_grad
     
@@ -194,7 +205,9 @@ def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarr
                               theta: np.ndarray, K: np.ndarray, lambda_cog: float = 0.0,
                               use_jacobian: bool = False, t_max: float = 12.0,
                               beta_all: np.ndarray = None, assignments: np.ndarray = None,
-                              patient_idx: int = None, lambda_jsd: float = 0.0) -> float:
+                              patient_idx: int = None, lambda_jsd: float = 0.0,
+                              jsd_n_bins: int = None, jsd_bandwidth: float = None,
+                              jsd_value_range: tuple = None) -> float:
     """
     Estimates the optimal beta_i for a single patient.
 
@@ -245,18 +258,20 @@ def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarr
     if use_jacobian == True:
         loss_function = beta_loss_jac
         args=(X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, K, lambda_cog,
-              beta_all, assignments, patient_idx, lambda_jsd, t_max)
+              beta_all, assignments, patient_idx, lambda_jsd, t_max,
+              jsd_n_bins, jsd_bandwidth, jsd_value_range)
     else:
         loss_function = beta_loss
         args=(X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, lambda_cog,
-              beta_all, assignments, patient_idx, lambda_jsd, t_max)
+              beta_all, assignments, patient_idx, lambda_jsd, t_max,
+              jsd_n_bins, jsd_bandwidth, jsd_value_range)
 
     result = minimize(
         loss_function,
         x0=beta_guess,
         args=args,
         jac=use_jacobian,
-        bounds=[(0, t_max)],
+        #bounds=[(0, t_max)],
         method="L-BFGS-B"
     )
 
@@ -269,7 +284,9 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
                                    assignments: np.ndarray, K: np.ndarray,
                                    cog_a: np.ndarray, cog_b: float,
                                    lambda_cog: float, lambda_jsd: float, t_max: float,
-                                   X_pred_by_cluster: dict = None) -> tuple:
+                                   X_pred_by_cluster: dict = None,
+                                   jsd_n_bins: int = None, jsd_bandwidth: float = None,
+                                   jsd_value_range: tuple = None) -> tuple:
     """
     Vectorized loss and gradient for all patients' betas simultaneously.
     
@@ -364,13 +381,17 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         subtype_1_betas = beta_all[assignments == 1]
         
         if len(subtype_0_betas) > 0 and len(subtype_1_betas) > 0:
+            # Determine JSD value range
+            if jsd_value_range is None:
+                jsd_value_range = (0, t_max)
+            
             # Use same JSD parameters as in _jsd_loss_and_grad for consistency
             jsd_calc = KernelJSD(
                 alpha=subtype_0_betas,
                 beta=subtype_1_betas,
-                value_range=(0, t_max),
-                n_bins=50,  # More bins for better resolution
-                bandwidth=None,  # Auto-compute using Silverman's rule
+                value_range=jsd_value_range,
+                n_bins=jsd_n_bins,
+                bandwidth=jsd_bandwidth,
             )
             jsd_value = jsd_calc.jsd()
             jsd_loss = -lambda_jsd * jsd_value
@@ -399,7 +420,9 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
                   assignments: np.ndarray, K: np.ndarray,
                   cog_a: np.ndarray, cog_b: float,
                   lambda_cog: float = 0.0, lambda_jsd: float = 0.0,
-                  t_max: float = 12.0) -> tuple:
+                  t_max: float = 12.0,
+                  jsd_n_bins: int = None, jsd_bandwidth: float = None,
+                  jsd_value_range: tuple = None) -> tuple:
     """
     Vectorized estimation of beta values for all patients simultaneously.
     
@@ -466,7 +489,8 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
             beta_vec, X_obs, dt, ids, cog, t_span,
             cluster_f, cluster_scalar_K, s, assignments, K,
             cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
-            X_pred_by_cluster
+            X_pred_by_cluster,
+            jsd_n_bins, jsd_bandwidth, jsd_value_range
         )
         return loss
     
@@ -475,7 +499,8 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
             beta_vec, X_obs, dt, ids, cog, t_span,
             cluster_f, cluster_scalar_K, s, assignments, K,
             cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
-            X_pred_by_cluster
+            X_pred_by_cluster,
+            jsd_n_bins, jsd_bandwidth, jsd_value_range
         )
         return grad
     
@@ -485,7 +510,7 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         x0=beta_all.copy(),
         method="L-BFGS-B",
         jac=grad_func,
-        bounds=[(0, t_max)] * n_patients,
+        #bounds=[(0, t_max)] * n_patients,
         options={'maxiter': 100}
     )
     
@@ -496,7 +521,8 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         optimized_beta, X_obs, dt, ids, cog, t_span,
         cluster_f, cluster_scalar_K, s, assignments, K,
         cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
-        X_pred_by_cluster
+        X_pred_by_cluster,
+        jsd_n_bins, jsd_bandwidth, jsd_value_range
     )
     
     return optimized_beta, total_lse

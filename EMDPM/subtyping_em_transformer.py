@@ -122,6 +122,10 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         else:
             initial_beta = initialize_beta(ids=np.arange(n_patients), beta_range=(0, self.t_max), rng=self.rng)
 
+        max_val = np.max(initial_beta)
+        mask = (initial_beta > max_val - 1) & (initial_beta < max_val)
+        initial_beta[mask] -= 2
+        
         K = self.K
 
         rng = self.rng
