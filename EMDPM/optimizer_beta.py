@@ -68,7 +68,8 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
               beta_all: np.ndarray = None, assignments: np.ndarray = None,
               patient_idx: int = None, lambda_jsd: float = 0.0, t_max: float = 12.0,
               jsd_n_bins: int = None, jsd_bandwidth: float = None,
-              jsd_value_range: tuple = None) -> float:
+              jsd_value_range: tuple = None,
+              lambda_beta: float = 0.0, beta_mean: float = None, beta_var: float = None) -> float:
     
     """
     Computes the loss for optimizing a single patient's beta_i.
@@ -105,7 +106,12 @@ def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
         jsd_loss, _ = _jsd_loss_and_grad(beta_i, beta_all, assignments, patient_idx, lambda_jsd, t_max,
                                          jsd_n_bins, jsd_bandwidth, jsd_value_range)
 
-    return loss + cog_prior + jsd_loss
+    # Add L2 regularization on beta if provided
+    l2_loss = 0.0
+    if lambda_beta > 0 and beta_mean is not None and beta_var is not None:
+        l2_loss = lambda_beta * (beta_i - beta_mean)**2 / beta_var
+
+    return loss + cog_prior + jsd_loss + l2_loss
     
     
 def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
@@ -115,7 +121,8 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
                   beta_all: np.ndarray = None, assignments: np.ndarray = None,
                   patient_idx: int = None, lambda_jsd: float = 0.0, t_max: float = 12.0,
                   jsd_n_bins: int = None, jsd_bandwidth: float = None,
-                  jsd_value_range: tuple = None) -> tuple:
+                  jsd_value_range: tuple = None,
+                  lambda_beta: float = 0.0, beta_mean: float = None, beta_var: float = None) -> tuple:
     """
     Computes the loss and gradient for optimizing a single patient's beta_i.
 
@@ -197,6 +204,13 @@ def beta_loss_jac(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
         loss += jsd_loss
         grad += jsd_grad
     
+    # Add L2 regularization on beta if provided
+    if lambda_beta > 0 and beta_mean is not None and beta_var is not None:
+        l2_loss = lambda_beta * (beta_i - beta_mean)**2 / beta_var
+        grad_l2 = 2 * lambda_beta * (beta_i - beta_mean) / beta_var
+        loss += l2_loss
+        grad += grad_l2
+    
     return loss, grad
 
 def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
@@ -207,7 +221,8 @@ def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarr
                               beta_all: np.ndarray = None, assignments: np.ndarray = None,
                               patient_idx: int = None, lambda_jsd: float = 0.0,
                               jsd_n_bins: int = None, jsd_bandwidth: float = None,
-                              jsd_value_range: tuple = None) -> float:
+                              jsd_value_range: tuple = None,
+                              lambda_beta: float = 0.0, beta_mean: float = None, beta_var: float = None) -> float:
     """
     Estimates the optimal beta_i for a single patient.
 
@@ -259,19 +274,21 @@ def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarr
         loss_function = beta_loss_jac
         args=(X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, K, lambda_cog,
               beta_all, assignments, patient_idx, lambda_jsd, t_max,
-              jsd_n_bins, jsd_bandwidth, jsd_value_range)
+              jsd_n_bins, jsd_bandwidth, jsd_value_range,
+              lambda_beta, beta_mean, beta_var)
     else:
         loss_function = beta_loss
         args=(X_obs_i, dt_i, X_pred, t_span, cog_i, cog_a, cog_b, theta, lambda_cog,
               beta_all, assignments, patient_idx, lambda_jsd, t_max,
-              jsd_n_bins, jsd_bandwidth, jsd_value_range)
+              jsd_n_bins, jsd_bandwidth, jsd_value_range,
+              lambda_beta, beta_mean, beta_var)
 
     result = minimize(
         loss_function,
         x0=beta_guess,
         args=args,
         jac=use_jacobian,
-        #bounds=[(0, t_max)],
+        bounds=[(0, t_max)],
         method="L-BFGS-B"
     )
 
@@ -280,13 +297,14 @@ def estimate_beta_for_patient(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarr
 
 def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
                                    ids: np.ndarray, cog: np.ndarray, t_span: np.ndarray,
-                                   cluster_f: list, cluster_scalar_K: list, s: np.ndarray,
+                                   cluster_f: list, scalar_K: float, s: np.ndarray,
                                    assignments: np.ndarray, K: np.ndarray,
                                    cog_a: np.ndarray, cog_b: float,
                                    lambda_cog: float, lambda_jsd: float, t_max: float,
                                    X_pred_by_cluster: dict = None,
                                    jsd_n_bins: int = None, jsd_bandwidth: float = None,
-                                   jsd_value_range: tuple = None) -> tuple:
+                                   jsd_value_range: tuple = None,
+                                   lambda_beta: float = 0.0, beta_mean: float = None, beta_var: float = None) -> tuple:
     """
     Vectorized loss and gradient for all patients' betas simultaneously.
     
@@ -306,8 +324,8 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         Time span for trajectories
     cluster_f : list
         List of f vectors, one per cluster
-    cluster_scalar_K : list
-        List of scalar_K values, one per cluster
+    scalar_K : float
+        Global scalar_K parameter (shared across all subtypes)
     s : np.ndarray
         Scaling parameters (n_biomarkers,)
     assignments : np.ndarray
@@ -341,9 +359,8 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         X_pred_by_cluster = {}
         for subtype in range(len(cluster_f)):
             f_cluster = np.ravel(cluster_f[subtype])
-            scalar_K_cluster = cluster_scalar_K[subtype]
             X_pred_by_cluster[subtype] = solve_system(
-                np.zeros(n_biomarkers), f_cluster, K, t_span, scalar_K_cluster
+                np.zeros(n_biomarkers), f_cluster, K, t_span, scalar_K
             )
     
     total_loss = 0.0
@@ -360,16 +377,16 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         # Get cluster-specific parameters
         subtype_i = assignments[idx]
         f_cluster_i = np.ravel(cluster_f[subtype_i])
-        scalar_K_cluster_i = cluster_scalar_K[subtype_i]
         X_pred_cluster_i = X_pred_by_cluster[subtype_i]
-        theta_cluster_i = np.concatenate([f_cluster_i, s, [scalar_K_cluster_i]])
+        theta_cluster_i = np.concatenate([f_cluster_i, s, [scalar_K]])
         
         # Compute loss and gradient for this patient (WITHOUT JSD - computed separately)
         loss_i, grad_i = beta_loss_jac(
             beta_i, X_obs_i, dt_i, X_pred_cluster_i, t_span,
             cog_i, cog_a, cog_b, theta_cluster_i, K, lambda_cog,
             beta_all=None, assignments=None, patient_idx=None,
-            lambda_jsd=0.0, t_max=t_max
+            lambda_jsd=0.0, t_max=t_max,
+            lambda_beta=lambda_beta, beta_mean=beta_mean, beta_var=beta_var
         )
         
         total_loss += loss_i
@@ -416,10 +433,11 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
 
 def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
                   ids: np.ndarray, cog: np.ndarray, t_span: np.ndarray,
-                  cluster_f: list, cluster_scalar_K: list, s: np.ndarray,
+                  cluster_f: list, scalar_K: float, s: np.ndarray,
                   assignments: np.ndarray, K: np.ndarray,
                   cog_a: np.ndarray, cog_b: float,
                   lambda_cog: float = 0.0, lambda_jsd: float = 0.0,
+                  lambda_beta: float = 0.0, beta_mean: float = None, beta_var: float = None,
                   t_max: float = 12.0,
                   jsd_n_bins: int = None, jsd_bandwidth: float = None,
                   jsd_value_range: tuple = None) -> tuple:
@@ -445,8 +463,8 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         Time span for trajectories
     cluster_f : list
         List of f vectors, one per cluster. Each is (n_biomarkers,)
-    cluster_scalar_K : list
-        List of scalar_K values, one per cluster
+    scalar_K : float
+        Global scalar_K parameter (shared across all subtypes)
     s : np.ndarray
         Scaling parameters (n_biomarkers,)
     assignments : np.ndarray
@@ -479,30 +497,33 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
     X_pred_by_cluster = {}
     for subtype in range(len(cluster_f)):
         f_cluster = np.ravel(cluster_f[subtype])
-        scalar_K_cluster = cluster_scalar_K[subtype]
         X_pred_by_cluster[subtype] = solve_system(
-            np.zeros(n_biomarkers), f_cluster, K, t_span, scalar_K_cluster
+            np.zeros(n_biomarkers), f_cluster, K, t_span, scalar_K
         )
 
     def loss_func(beta_vec):
         loss, _ = _vectorized_beta_loss_and_grad(
             beta_vec, X_obs, dt, ids, cog, t_span,
-            cluster_f, cluster_scalar_K, s, assignments, K,
+            cluster_f, scalar_K, s, assignments, K,
             cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
             X_pred_by_cluster,
-            jsd_n_bins, jsd_bandwidth, jsd_value_range
+            jsd_n_bins, jsd_bandwidth, jsd_value_range,
+            lambda_beta, beta_mean, beta_var
         )
         return loss
     
     def grad_func(beta_vec):
         _, grad = _vectorized_beta_loss_and_grad(
             beta_vec, X_obs, dt, ids, cog, t_span,
-            cluster_f, cluster_scalar_K, s, assignments, K,
+            cluster_f, scalar_K, s, assignments, K,
             cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
             X_pred_by_cluster,
-            jsd_n_bins, jsd_bandwidth, jsd_value_range
+            jsd_n_bins, jsd_bandwidth, jsd_value_range,
+            lambda_beta, beta_mean, beta_var
         )
         return grad
+
+
     
     # optimize all betas simultaneously
     result = minimize(
@@ -510,19 +531,20 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         x0=beta_all.copy(),
         method="L-BFGS-B",
         jac=grad_func,
-        #bounds=[(0, t_max)] * n_patients,
+        bounds=[(0, t_max)] * n_patients,
         options={'maxiter': 100}
     )
     
     optimized_beta = result.x
     
-    # compute final LSE (residuals + clinical prior + jsd)
+    # compute final LSE (residuals + clinical prior + jsd + l2)
     total_lse, _ = _vectorized_beta_loss_and_grad(
         optimized_beta, X_obs, dt, ids, cog, t_span,
-        cluster_f, cluster_scalar_K, s, assignments, K,
+        cluster_f, scalar_K, s, assignments, K,
         cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
         X_pred_by_cluster,
-        jsd_n_bins, jsd_bandwidth, jsd_value_range
+        jsd_n_bins, jsd_bandwidth, jsd_value_range,
+        lambda_beta, beta_mean, beta_var
     )
     
     return optimized_beta, total_lse

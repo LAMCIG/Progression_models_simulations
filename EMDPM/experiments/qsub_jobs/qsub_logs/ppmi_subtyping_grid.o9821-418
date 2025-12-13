@@ -1,0 +1,35 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup ===
+Total parameter combinations: 432
+Current candidate: 418
+
+=== Parameters for Candidate 418 ===
+  lambda_f: 1.5
+  lambda_cog: 0.1
+  lambda_scalar: 0.5
+  lambda_jsd: 0.0
+  lambda_beta: 0.15
+  0%|          | 0/30 [00:00<?, ?it/s]  3%|3         | 1/30 [00:20<09:55, 20.52s/it]  7%|6         | 2/30 [00:35<08:08, 17.46s/it] 10%|#         | 3/30 [00:49<07:01, 15.63s/it] 13%|#3        | 4/30 [01:08<07:21, 16.98s/it] 17%|#6        | 5/30 [01:26<07:16, 17.47s/it] 20%|##        | 6/30 [01:42<06:49, 17.05s/it] 23%|##3       | 7/30 [01:52<05:33, 14.48s/it] 27%|##6       | 8/30 [02:00<04:34, 12.47s/it] 30%|###       | 9/30 [02:10<04:04, 11.63s/it] 33%|###3      | 10/30 [02:18<03:31, 10.59s/it] 37%|###6      | 11/30 [02:28<03:16, 10.36s/it] 40%|####      | 12/30 [02:45<03:42, 12.37s/it] 43%|####3     | 13/30 [02:58<03:35, 12.68s/it] 47%|####6     | 14/30 [03:11<03:22, 12.64s/it] 50%|#####     | 15/30 [03:22<03:02, 12.18s/it] 53%|#####3    | 16/30 [03:31<02:39, 11.42s/it] 57%|#####6    | 17/30 [03:40<02:16, 10.51s/it] 60%|######    | 18/30 [03:59<02:36, 13.03s/it] 63%|######3   | 19/30 [04:05<02:02, 11.15s/it] 67%|######6   | 20/30 [04:12<01:37,  9.76s/it] 70%|#######   | 21/30 [04:22<01:28,  9.88s/it] 73%|#######3  | 22/30 [04:28<01:09,  8.72s/it] 77%|#######6  | 23/30 [04:36<01:00,  8.60s/it] 80%|########  | 24/30 [04:46<00:53,  8.98s/it] 83%|########3 | 25/30 [04:54<00:43,  8.71s/it] 87%|########6 | 26/30 [05:02<00:32,  8.24s/it] 90%|######### | 27/30 [05:08<00:22,  7.61s/it] 93%|#########3| 28/30 [05:18<00:16,  8.30s/it] 97%|#########6| 29/30 [05:26<00:08,  8.43s/it]100%|##########| 30/30 [05:36<00:00,  8.93s/it]100%|##########| 30/30 [05:36<00:00, 11.23s/it]
+Estimating beta values:   0%|          | 0/30 [00:00<?, ?it/s]Estimating beta values:  20%|##        | 6/30 [00:00<00:00, 57.38it/s]Estimating beta values:  43%|####3     | 13/30 [00:00<00:00, 61.94it/s]Estimating beta values:  77%|#######6  | 23/30 [00:00<00:00, 77.55it/s]Estimating beta values: 100%|##########| 30/30 [00:00<00:00, 68.55it/s]
+Saved: /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/PPMI_subtyping_grid_418_lambda_f1p500_lambda_cog0p100_lambda_scalar0p500_lambda_jsd0p000_lambda_beta0p150.npz
+Final LSE: 715.816913

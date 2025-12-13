@@ -14,8 +14,8 @@ args = parser.parse_args()
 current_candidate = args.candidate
 
 df = pd.read_csv("/data01/bgutman/MRI_data/PPMI/data_ppmi_pd.csv")
-# df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_22.csv")
-df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
+df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_22.csv")
+#df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
 n_biomarkers = 68
 
 ## remove non-longitudinal observations
@@ -214,7 +214,8 @@ em = EM(K=K,
         jac_toggle=True,
         max_iter=30,
         t_max=40,
-        epsilon=1e-1)
+        epsilon=1e-2
+        )
 
 em.fit(X_train)
 beta_val = em.transform(X_val)

@@ -1,0 +1,35 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup ===
+Total parameter combinations: 432
+Current candidate: 56
+
+=== Parameters for Candidate 56 ===
+  lambda_f: 0.5
+  lambda_cog: 0.05
+  lambda_scalar: 0.1
+  lambda_jsd: 0.1
+  lambda_beta: 0.05
+  0%|          | 0/30 [00:00<?, ?it/s]  3%|3         | 1/30 [00:36<17:27, 36.11s/it]  7%|6         | 2/30 [00:57<12:52, 27.57s/it] 10%|#         | 3/30 [01:25<12:32, 27.88s/it] 13%|#3        | 4/30 [01:36<09:05, 20.98s/it] 13%|#3        | 4/30 [06:06<39:40, 91.55s/it]
+Estimating beta values:   0%|          | 0/30 [00:00<?, ?it/s]Estimating beta values:  13%|#3        | 4/30 [00:00<00:00, 35.69it/s]Estimating beta values:  37%|###6      | 11/30 [00:00<00:00, 53.75it/s]Estimating beta values:  57%|#####6    | 17/30 [00:00<00:00, 52.26it/s]Estimating beta values:  77%|#######6  | 23/30 [00:00<00:00, 51.00it/s]Estimating beta values:  97%|#########6| 29/30 [00:00<00:00, 49.30it/s]Estimating beta values: 100%|##########| 30/30 [00:00<00:00, 48.79it/s]
+Saved: /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/PPMI_subtyping_grid_056_lambda_f0p500_lambda_cog0p050_lambda_scalar0p100_lambda_jsd0p100_lambda_beta0p050.npz
+Final LSE: 1363.040766

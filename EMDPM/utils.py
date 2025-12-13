@@ -293,7 +293,7 @@ def match_labels_best_overlap(em_labels: np.ndarray, true_labels: np.ndarray) ->
 
 def print_parameter_comparison(
     fitted_f_list: Sequence[np.ndarray],
-    fitted_scalar_K_list: Sequence[float],
+    fitted_scalar_K: float,
     fitted_s: np.ndarray,
     true_f_list: Sequence[np.ndarray],
     true_scalar_K_list: Sequence[float],
@@ -308,14 +308,14 @@ def print_parameter_comparison(
     ----------
     fitted_f_list : Sequence[np.ndarray]
         List of fitted f arrays, one per subtype.
-    fitted_scalar_K_list : Sequence[float]
-        List of fitted scalar_K values, one per subtype.
+    fitted_scalar_K : float
+        Fitted global scalar_K value (shared across all subtypes).
     fitted_s : np.ndarray
         Fitted global s array.
     true_f_list : Sequence[np.ndarray]
         List of true f arrays, one per subtype.
     true_scalar_K_list : Sequence[float]
-        List of true scalar_K values, one per subtype.
+        List of true scalar_K values, one per subtype (for comparison).
     true_s : np.ndarray
         True global s array.
     subtype_mapping : np.ndarray, optional
@@ -331,24 +331,29 @@ def print_parameter_comparison(
         subtype_mapping = np.arange(n_subtypes)
     
     
-    # Compare f and scalar_K by subtype
+    # Compare f by subtype
     for fitted_subtype in range(n_subtypes):
         true_subtype = subtype_mapping[fitted_subtype]
         f_fitted = np.asarray(fitted_f_list[fitted_subtype])
         f_true = np.asarray(true_f_list[true_subtype])
-        scalar_K_fitted = fitted_scalar_K_list[fitted_subtype]
-        scalar_K_true = true_scalar_K_list[true_subtype]
         
         f_error = np.mean(np.abs(f_fitted - f_true))
-        scalar_K_error = np.abs(scalar_K_fitted - scalar_K_true)
         
         print(f"\nFitted Subtype {fitted_subtype} -> True Subtype {true_subtype}:")
         print(f"  f_fitted:      {f_fitted}")
         print(f"  f_true:        {f_true}")
-        print(f"  scalar_K_fitted: {scalar_K_fitted:.6f}")
-        print(f"  scalar_K_true:   {scalar_K_true:.6f}")
+    
+    # Compare global scalar_K (single value, compare with average of true values)
+    true_scalar_K_mean = np.mean(true_scalar_K_list)
+    scalar_K_error = np.abs(fitted_scalar_K - true_scalar_K_mean)
+    print(f"\nGlobal scalar_K:")
+    print(f"  scalar_K_fitted: {fitted_scalar_K:.6f}")
+    print(f"  scalar_K_true (mean): {true_scalar_K_mean:.6f}")
+    if len(true_scalar_K_list) > 1:
+        print(f"  scalar_K_true (per subtype): {true_scalar_K_list}")
     
     # Compare global s
+    print(f"\nGlobal s:")
     print(f"  s_fitted:      {fitted_s}")
     print(f"  s_true:        {true_s}")
 
@@ -526,6 +531,6 @@ def fit_mixedlm_beta_from_clinical(df: pd.DataFrame = None, ids: np.ndarray = No
     pid_to_beta = {pid: initial_beta[i] for i, pid in enumerate(unique_ids)}
     
     if verbose:
-        print("β_init summary:", pd.Series(initial_beta).describe())
+        print("beta_init summary:", pd.Series(initial_beta).describe())
     
     return initial_beta, pid_to_beta, result

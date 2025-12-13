@@ -29,6 +29,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 lambda_cog: float = 0,
                 lambda_scalar: float = 0.0,
                 lambda_jsd: float = 0.0,  # JSD regularization for beta separation
+                lambda_beta: float = 0.0,  # L2 regularization on beta values
                  
                  # [initial guesses]
                  initial_f: np.ndarray = None, 
@@ -64,6 +65,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         self.lambda_cog = lambda_cog
         self.lambda_scalar = lambda_scalar
         self.lambda_jsd = lambda_jsd
+        self.lambda_beta = lambda_beta
         
         # [initial guesses]
         self.initial_f = initial_f
@@ -126,6 +128,11 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         mask = (initial_beta > max_val - 1) & (initial_beta < max_val)
         initial_beta[mask] -= 2
         
+        # Compute beta statistics for L2 regularization
+        beta_mean = np.mean(initial_beta)
+        beta_var = np.var(initial_beta)
+        beta_var = max(beta_var, 1e-8)  # Add small epsilon to avoid division by zero
+        
         K = self.K
 
         rng = self.rng
@@ -164,6 +171,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         initial_theta = np.concatenate([initial_f, initial_s, [initial_scalar_K]])
         
+        # Initialize current scalar_K (global, not per-cluster)
+        current_scalar_K = initial_scalar_K
+        
         # cog regression params
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
@@ -180,7 +190,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         cog_regression_history[:, 0] = np.concatenate([initial_cog_a, [initial_cog_b]])
         
         ## Compute Initial LSE
-        X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=initial_scalar_K)
+        X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=current_scalar_K)
         initial_lse = 0.0
         
         for idx, pid in enumerate(np.unique(ids)): # each iter will be like (idx, pid)
@@ -192,9 +202,11 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             beta_i = initial_beta[idx]
             
             if current_jac:
-                res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K, self.lambda_cog)
+                res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K, self.lambda_cog,
+                                      lambda_beta=self.lambda_beta, beta_mean=beta_mean, beta_var=beta_var)
             else:
-                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, self.lambda_cog)
+                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, self.lambda_cog,
+                               lambda_beta=self.lambda_beta, beta_mean=beta_mean, beta_var=beta_var)
             initial_lse += res
             
         lse_history[0] = initial_lse
@@ -202,13 +214,13 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         # initialize current vars for main loop
         current_beta = initial_beta
         current_s = initial_s
+        current_scalar_K = initial_scalar_K
         current_cog_a = initial_cog_a
         current_cog_b = initial_cog_b
         
         # Initialize cluster-level parameters
-        # Each cluster has its own f and scalar_K
+        # Each cluster has its own f (scalar_K is now global)
         cluster_f = []
-        cluster_scalar_K = []
         for subtype in range(self.n_subtypes):
             if self.initial_f is not None:
                 # Ensure initial_f is 1D before using it
@@ -216,7 +228,6 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 cluster_f.append(initial_f_flat.copy() + rng.uniform(-0.01, 0.01, size=n_biomarkers))
             else:
                 cluster_f.append(rng.uniform(0, 0.1, size=n_biomarkers))
-            cluster_scalar_K.append(initial_scalar_K * rng.uniform(0.8, 1.2))
         
         # Initialize cluster assignments (use provided or random)
         if self.initial_assignments is not None:
@@ -252,19 +263,18 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
             
-            ## STEP 1: GLOBAL LEVEL --> update s (using all patients)
-            # Use average f and scalar_K across clusters as reference for global s update
+            ## STEP 1: GLOBAL LEVEL --> update s and scalar_K (using all patients)
+            # Use average f across clusters as reference for global s and scalar_K update
             # For now, use the first cluster's parameters as reference
             ref_f = np.ravel(cluster_f[0])  # Ensure ref_f is 1D
-            ref_scalar_K = cluster_scalar_K[0]
             
-            current_s = fit_theta_globals(
+            current_s, current_scalar_K = fit_theta_globals(
                 X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
                 t_span=self.t_span, use_jacobian=current_jac,
-                f=ref_f, scalar_K=ref_scalar_K,
+                f=ref_f,
                 beta_pred=current_beta,
-                s_guess=current_s,
-                lambda_s=0.0,
+                s_guess=current_s, scalar_K_guess=current_scalar_K,
+                lambda_s=0.0, lambda_scalar=self.lambda_scalar,
                 rng=rng
             )
             
@@ -272,13 +282,13 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             # Assign each patient to the cluster that gives lowest reconstruction error
             assignments = self._update_assignments(
                 X_obs, dt, ids, cog, current_beta,
-                cluster_f, cluster_scalar_K, current_s,
+                cluster_f, current_scalar_K, current_s,
                 K, self.t_span, current_cog_a, current_cog_b,
                 self.lambda_cog
             )
             assignment_history[:, hist_idx] = assignments
             
-            ## STEP 3: CLUSTER LEVEL --> update f[subtype] and scalar_K[subtype] for each cluster
+            ## STEP 3: CLUSTER LEVEL --> update f[subtype] for each cluster (scalar_K is now global)
             # TODO: This should be run in parallel
             for subtype in range(self.n_subtypes):
                 # get mask for patients in this cluster
@@ -303,23 +313,21 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 ids_cluster_local = np.array([cluster_id_to_local[i] for i in ids_cluster])
                 beta_cluster = current_beta[cluster_patient_indices]
                 
-                # Update cluster parameters
+                # Update cluster parameters (only f, scalar_K is global)
                 # Ensure f_guess is 1D
                 f_guess_flat = np.ravel(cluster_f[subtype])
-                f_cluster, scalar_K_cluster = fit_theta_cluster(
+                f_cluster = fit_theta_cluster(
                     X_obs=X_obs_cluster, dt_obs=dt_cluster, ids=ids_cluster_local, K=K,
                     t_span=self.t_span, use_jacobian=current_jac,
-                    s=current_s,
-                    lambda_f=self.lambda_f, lambda_scalar=self.lambda_scalar,
+                    s=current_s, scalar_K=current_scalar_K,
+                    lambda_f=self.lambda_f,
                     beta_pred=beta_cluster,
                     f_guess=f_guess_flat,
-                    scalar_K_guess=cluster_scalar_K[subtype],
                     rng=rng
                 )
                 
                 # Ensure f_cluster is 1D before storing
                 cluster_f[subtype] = np.ravel(f_cluster)
-                cluster_scalar_K[subtype] = scalar_K_cluster
             
             ## STEP 4: SUBJECT LEVEL BETA --> update beta using cluster-level theta
             # Vectorized optimization of all betas simultaneously with JSD included
@@ -331,7 +339,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 cog=cog,
                 t_span=self.t_span,
                 cluster_f=cluster_f,
-                cluster_scalar_K=cluster_scalar_K,
+                scalar_K=current_scalar_K,
                 s=current_s,
                 assignments=assignments,
                 K=K,
@@ -339,6 +347,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 cog_b=current_cog_b,
                 lambda_cog=self.lambda_cog,
                 lambda_jsd=self.lambda_jsd,
+                lambda_beta=self.lambda_beta,
+                beta_mean=beta_mean,
+                beta_var=beta_var,
                 t_max=self.t_max
             )
             
@@ -346,7 +357,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             
             # Store cluster parameters in history (for first cluster as representative)
             # Note: In full implementation, you might want to store all cluster parameters
-            representative_theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [cluster_scalar_K[0]]])
+            representative_theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [current_scalar_K]])
             theta_history[:, hist_idx] = representative_theta
 
             # if self.use_jacobian and lse > best_lse and not jacobian_switched:
@@ -395,7 +406,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         # Store final cluster parameters
         self.cluster_f = cluster_f
-        self.cluster_scalar_K = cluster_scalar_K
+        self.final_scalar_K = current_scalar_K  # Global scalar_K
         self.final_s = current_s
         self.final_assignments = assignments
         self.subtype_mapping = None  # Will be set if compute_subtype_mapping is called
@@ -423,21 +434,21 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             self.label_mapping_applied = False
         
         # Store representative theta (first cluster)
-        self.theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [cluster_scalar_K[0]]])
+        self.theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [current_scalar_K]])
         self.cog_a = self.cog_regression_history[:-1, -1]
         self.cog_b = self.cog_regression_history[-1, -1]
         
         self.final_f = np.ravel(cluster_f[0]).copy()  # Representative f (ensure 1D)
-        self.scalar_K_ = cluster_scalar_K[0]  # Representative scalar_K
+        self.scalar_K_ = current_scalar_K  # Global scalar_K
 
         # For transform, use first cluster as default
         f = np.ravel(cluster_f[0])  # Ensure 1D
-        scalar_K = cluster_scalar_K[0]
+        scalar_K = current_scalar_K  # Global scalar_K
         self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
         
         return self
     
-    def _update_assignments(self, X_obs, dt, ids, cog, beta, cluster_f, cluster_scalar_K, s,
+    def _update_assignments(self, X_obs, dt, ids, cog, beta, cluster_f, scalar_K, s,
                             K, t_span, cog_a, cog_b, lambda_cog):
         """
         Update cluster assignments using hard assignment based on reconstruction error.
@@ -464,9 +475,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             # Try each cluster and find the one with lowest reconstruction error
             for subtype in range(n_subtypes):
                 f_cluster = np.ravel(cluster_f[subtype])  # Ensure 1D
-                scalar_K_cluster = cluster_scalar_K[subtype]
-                theta_cluster = np.concatenate([f_cluster, s, [scalar_K_cluster]])
-                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K_cluster)
+                theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
+                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
                 
                 # Compute reconstruction error
                 error = beta_loss(
@@ -504,9 +514,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             
             for subtype in range(n_subtypes):
                 f_cluster = np.ravel(cluster_f[subtype])
-                scalar_K_cluster = cluster_scalar_K[subtype]
-                theta_cluster = np.concatenate([f_cluster, s, [scalar_K_cluster]])
-                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K_cluster)
+                theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
+                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
                 
                 error = beta_loss(
                     beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,

@@ -94,7 +94,7 @@ def theta_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
     x_pred = np.zeros_like(x_obs) # (n_obs, n_biomarkers)
     # print("Breakpoint 2 Theta: ", x_pred.shape, t_obs.shape, t_span.shape, x_scaled.shape)
     for j in range(n_biomarkers):
-        x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j])
+        x_pred[:,j] = np.interp(t_obs, t_span, x_scaled[j], )
 
     residuals = x_obs - x_pred
     loss = np.sum(residuals**2) + lambda_f * np.sum(np.abs(f)) + lambda_scalar * (scalar_K**2)
