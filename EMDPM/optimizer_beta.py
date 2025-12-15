@@ -299,7 +299,7 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
                                    ids: np.ndarray, cog: np.ndarray, t_span: np.ndarray,
                                    cluster_f: list, scalar_K: float, s: np.ndarray,
                                    assignments: np.ndarray, K: np.ndarray,
-                                   cog_a: np.ndarray, cog_b: float,
+                                   cluster_cog_a: list, cluster_cog_b: list,
                                    lambda_cog: float, lambda_jsd: float, t_max: float,
                                    X_pred_by_cluster: dict = None,
                                    jsd_n_bins: int = None, jsd_bandwidth: float = None,
@@ -332,10 +332,10 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         Cluster assignment for each patient (n_patients,)
     K : np.ndarray
         Connectivity matrix
-    cog_a : np.ndarray
-        Cognitive regression coefficients
-    cog_b : float
-        Cognitive regression intercept
+    cluster_cog_a : list
+        Cognitive regression coefficients per subtype (n_subtypes, n_cog_features)
+    cluster_cog_b : list
+        Cognitive regression intercept per subtype (n_subtypes,)
     lambda_cog : float
         Cognitive regularization strength
     lambda_jsd : float
@@ -383,7 +383,7 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         # Compute loss and gradient for this patient (WITHOUT JSD - computed separately)
         loss_i, grad_i = beta_loss_jac(
             beta_i, X_obs_i, dt_i, X_pred_cluster_i, t_span,
-            cog_i, cog_a, cog_b, theta_cluster_i, K, lambda_cog,
+            cog_i, cluster_cog_a[subtype_i], cluster_cog_b[subtype_i], theta_cluster_i, K, lambda_cog,
             beta_all=None, assignments=None, patient_idx=None,
             lambda_jsd=0.0, t_max=t_max,
             lambda_beta=lambda_beta, beta_mean=beta_mean, beta_var=beta_var
@@ -435,7 +435,7 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
                   ids: np.ndarray, cog: np.ndarray, t_span: np.ndarray,
                   cluster_f: list, scalar_K: float, s: np.ndarray,
                   assignments: np.ndarray, K: np.ndarray,
-                  cog_a: np.ndarray, cog_b: float,
+                  cog_a, cog_b,
                   lambda_cog: float = 0.0, lambda_jsd: float = 0.0,
                   lambda_beta: float = 0.0, beta_mean: float = None, beta_var: float = None,
                   t_max: float = 12.0,
@@ -471,10 +471,12 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         Cluster assignment for each patient (n_patients,)
     K : np.ndarray
         Connectivity matrix
-    cog_a : np.ndarray
-        Cognitive regression coefficients (n_cog_features,)
-    cog_b : float
-        Cognitive regression intercept
+    cog_a : np.ndarray or list
+        Cognitive regression coefficients. If list, one per subtype (n_subtypes, n_cog_features).
+        If array, single set used for all subtypes (n_cog_features,).
+    cog_b : float or list
+        Cognitive regression intercept. If list, one per subtype (n_subtypes,).
+        If float, single value used for all subtypes.
     lambda_cog : float
         Cognitive regularization strength
     lambda_jsd : float
@@ -493,6 +495,14 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
     n_patients = len(unique_ids)
     n_biomarkers = X_obs.shape[1]
     
+    # Handle per-subtype vs global cognitive parameters
+    if isinstance(cog_a, list):
+        cluster_cog_a = cog_a
+        cluster_cog_b = cog_b if isinstance(cog_b, list) else [cog_b] * len(cluster_cog_a)
+    else:
+        cluster_cog_a = [cog_a] * len(cluster_f)
+        cluster_cog_b = [cog_b] * len(cluster_f)
+    
     # Pre-compute X_pred trajectories for each cluster
     X_pred_by_cluster = {}
     for subtype in range(len(cluster_f)):
@@ -505,7 +515,7 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         loss, _ = _vectorized_beta_loss_and_grad(
             beta_vec, X_obs, dt, ids, cog, t_span,
             cluster_f, scalar_K, s, assignments, K,
-            cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
+            cluster_cog_a, cluster_cog_b, lambda_cog, lambda_jsd, t_max,
             X_pred_by_cluster,
             jsd_n_bins, jsd_bandwidth, jsd_value_range,
             lambda_beta, beta_mean, beta_var
@@ -516,7 +526,7 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         _, grad = _vectorized_beta_loss_and_grad(
             beta_vec, X_obs, dt, ids, cog, t_span,
             cluster_f, scalar_K, s, assignments, K,
-            cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
+            cluster_cog_a, cluster_cog_b, lambda_cog, lambda_jsd, t_max,
             X_pred_by_cluster,
             jsd_n_bins, jsd_bandwidth, jsd_value_range,
             lambda_beta, beta_mean, beta_var
@@ -541,7 +551,7 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
     total_lse, _ = _vectorized_beta_loss_and_grad(
         optimized_beta, X_obs, dt, ids, cog, t_span,
         cluster_f, scalar_K, s, assignments, K,
-        cog_a, cog_b, lambda_cog, lambda_jsd, t_max,
+        cluster_cog_a, cluster_cog_b, lambda_cog, lambda_jsd, t_max,
         X_pred_by_cluster,
         jsd_n_bins, jsd_bandwidth, jsd_value_range,
         lambda_beta, beta_mean, beta_var

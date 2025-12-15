@@ -1,5 +1,4 @@
 import numpy as np
-
 import matplotlib
 # %matplotlib qt5 
 
@@ -19,7 +18,7 @@ def visualize_brain_region_statistics(region_statistics_dataframe,
                                       p_val_threshold = 0.05):
     
     if colormap is None:
-        colormap = 'coolwarm'
+        colormap = 'inferno'
 
     if cbar_string is None:
         cbar_string = 'Effect Size'

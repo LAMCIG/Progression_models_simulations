@@ -1,0 +1,35 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup ===
+Total parameter combinations: 1920
+Current candidate: 31
+
+=== Parameters for Candidate 31 ===
+  lambda_f: 0.3
+  lambda_cog: 0.05
+  lambda_scalar: 0.75
+  lambda_jsd: 0.5
+  lambda_beta: 1.0
+  0%|          | 0/100 [00:00<?, ?it/s]  1%|1         | 1/100 [00:22<37:04, 22.47s/it]  2%|2         | 2/100 [00:36<28:11, 17.26s/it]  3%|3         | 3/100 [00:53<28:11, 17.44s/it]  4%|4         | 4/100 [01:12<28:38, 17.90s/it]  5%|5         | 5/100 [01:23<24:26, 15.44s/it]  6%|6         | 6/100 [01:32<21:02, 13.43s/it]  7%|7         | 7/100 [04:14<1:35:49, 61.82s/it]  8%|8         | 8/100 [04:26<1:10:25, 45.93s/it]  9%|9         | 9/100 [06:42<1:52:18, 74.05s/it] 10%|#         | 10/100 [06:57<1:23:54, 55.93s/it] 11%|#1        | 11/100 [07:07<1:02:06, 41.87s/it] 12%|#2        | 12/100 [10:06<2:02:38, 83.61s/it] 13%|#3        | 13/100 [10:21<1:30:52, 62.67s/it] 14%|#4        | 14/100 [12:06<1:48:14, 75.52s/it] 15%|#5        | 15/100 [12:17<1:19:25, 56.07s/it] 15%|#5        | 15/100 [13:17<1:15:17, 53.15s/it]
+Estimating beta values:   0%|          | 0/30 [00:00<?, ?it/s]Estimating beta values:  20%|##        | 6/30 [00:00<00:00, 59.98it/s]Estimating beta values:  40%|####      | 12/30 [00:00<00:00, 46.42it/s]Estimating beta values:  57%|#####6    | 17/30 [00:00<00:00, 43.75it/s]Estimating beta values:  73%|#######3  | 22/30 [00:00<00:00, 42.35it/s]Estimating beta values:  90%|######### | 27/30 [00:00<00:00, 40.28it/s]Estimating beta values: 100%|##########| 30/30 [00:00<00:00, 42.11it/s]
+Saved: /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/ppmi_gridsearch_refined_fine/PPMI_subtyping_grid_031_lambda_f0p300_lambda_cog0p050_lambda_scalar0p750_lambda_jsd0p500_lambda_beta1p000.npz
+Final LSE: 964.256452

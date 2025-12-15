@@ -174,7 +174,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         # Initialize current scalar_K (global, not per-cluster)
         current_scalar_K = initial_scalar_K
         
-        # cog regression params
+        # cog regression params - per subtype
         initial_cog_a = np.ones(n_cog_features) # initialize a weight for each type of cog test
         initial_cog_b = 0 # bias term
                 
@@ -182,12 +182,13 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         theta_history = np.zeros((initial_theta.shape[0], self.max_iter + 1)) # extra column added for initial guesses
         beta_history = np.zeros((n_patients, self.max_iter + 1))
         lse_history = np.zeros(self.max_iter + 1)
-        cog_regression_history = np.zeros((n_cog_features + 1, self.max_iter + 1))  # + 1 is for intercept
+        cog_regression_history = np.zeros((self.n_subtypes, n_cog_features + 1, self.max_iter + 1))  # per subtype
         
         ## Append initial values to histories
         theta_history[:, 0] = initial_theta
         beta_history[:, 0] = initial_beta
-        cog_regression_history[:, 0] = np.concatenate([initial_cog_a, [initial_cog_b]])
+        for subtype in range(self.n_subtypes):
+            cog_regression_history[subtype, :, 0] = np.concatenate([initial_cog_a, [initial_cog_b]])
         
         ## Compute Initial LSE
         X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=current_scalar_K)
@@ -215,12 +216,12 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         current_beta = initial_beta
         current_s = initial_s
         current_scalar_K = initial_scalar_K
-        current_cog_a = initial_cog_a
-        current_cog_b = initial_cog_b
         
         # Initialize cluster-level parameters
-        # Each cluster has its own f (scalar_K is now global)
+        # Each cluster has its own f and cognitive regression params (scalar_K is now global)
         cluster_f = []
+        cluster_cog_a = []
+        cluster_cog_b = []
         for subtype in range(self.n_subtypes):
             if self.initial_f is not None:
                 # Ensure initial_f is 1D before using it
@@ -228,6 +229,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 cluster_f.append(initial_f_flat.copy() + rng.uniform(-0.01, 0.01, size=n_biomarkers))
             else:
                 cluster_f.append(rng.uniform(0, 0.1, size=n_biomarkers))
+            cluster_cog_a.append(initial_cog_a.copy())
+            cluster_cog_b.append(initial_cog_b)
         
         # Initialize cluster assignments (use provided or random)
         if self.initial_assignments is not None:
@@ -283,10 +286,27 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             assignments = self._update_assignments(
                 X_obs, dt, ids, cog, current_beta,
                 cluster_f, current_scalar_K, current_s,
-                K, self.t_span, current_cog_a, current_cog_b,
+                K, self.t_span, cluster_cog_a, cluster_cog_b,
                 self.lambda_cog
             )
             assignment_history[:, hist_idx] = assignments
+            
+            ## STEP 2.5: UPDATE COGNITIVE REGRESSION PARAMS PER SUBTYPE
+            for subtype in range(self.n_subtypes):
+                cluster_mask = (assignments == subtype)
+                if np.sum(cluster_mask) == 0:
+                    continue
+                cluster_patient_indices = np.where(cluster_mask)[0]
+                cluster_patient_mask = np.isin(ids, cluster_patient_indices)
+                
+                cog_subtype = cog[cluster_patient_mask]
+                dt_subtype = dt[cluster_patient_mask]
+                ids_subtype = ids[cluster_patient_mask]
+                beta_subtype = current_beta[cluster_patient_indices]
+                
+                cluster_cog_a[subtype], cluster_cog_b[subtype] = fit_linear_cog_regression_multi(
+                    cog_subtype, dt_subtype, beta_subtype, ids_subtype
+                )
             
             ## STEP 3: CLUSTER LEVEL --> update f[subtype] for each cluster (scalar_K is now global)
             # TODO: This should be run in parallel
@@ -343,8 +363,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 s=current_s,
                 assignments=assignments,
                 K=K,
-                cog_a=current_cog_a,
-                cog_b=current_cog_b,
+                cog_a=cluster_cog_a,
+                cog_b=cluster_cog_b,
                 lambda_cog=self.lambda_cog,
                 lambda_jsd=self.lambda_jsd,
                 lambda_beta=self.lambda_beta,
@@ -369,8 +389,20 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 if jacobian_switched == True: # early convergence detected
                     if self.verbose >= 2:
                         print("L-BFGS and Nelder-Mead both failed to improve LSE, exiting early due to convergence")
-                    current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta, ids)
-                    cog_regression_history[:, hist_idx] = np.concatenate([current_cog_a, [current_cog_b]])
+                    for subtype in range(self.n_subtypes):
+                        cluster_mask = (assignments == subtype)
+                        if np.sum(cluster_mask) == 0:
+                            continue
+                        cluster_patient_indices = np.where(cluster_mask)[0]
+                        cluster_patient_mask = np.isin(ids, cluster_patient_indices)
+                        cog_subtype = cog[cluster_patient_mask]
+                        dt_subtype = dt[cluster_patient_mask]
+                        ids_subtype = ids[cluster_patient_mask]
+                        beta_subtype = current_beta[cluster_patient_indices]
+                        cluster_cog_a[subtype], cluster_cog_b[subtype] = fit_linear_cog_regression_multi(
+                            cog_subtype, dt_subtype, beta_subtype, ids_subtype
+                        )
+                        cog_regression_history[subtype, :, hist_idx] = np.concatenate([cluster_cog_a[subtype], [cluster_cog_b[subtype]]])
                     lse_history[hist_idx] = lse
                     break 
                 
@@ -391,8 +423,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             # TODO: Get idx of best lse
             lse_history[hist_idx] = lse
             
-            current_cog_a, current_cog_b = fit_linear_cog_regression_multi(cog, dt, current_beta, ids)
-            cog_regression_history[:, hist_idx] = np.concatenate([current_cog_a, [current_cog_b]])
+            # Store cognitive regression params per subtype
+            for subtype in range(self.n_subtypes):
+                cog_regression_history[subtype, :, hist_idx] = np.concatenate([cluster_cog_a[subtype], [cluster_cog_b[subtype]]])
             
             loop_iter += 1
             pbar.update(1)
@@ -435,8 +468,10 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         # Store representative theta (first cluster)
         self.theta = np.concatenate([np.ravel(cluster_f[0]), current_s, [current_scalar_K]])
-        self.cog_a = self.cog_regression_history[:-1, -1]
-        self.cog_b = self.cog_regression_history[-1, -1]
+        self.cog_a = cluster_cog_a[0]  # Representative (first subtype)
+        self.cog_b = cluster_cog_b[0]
+        self.cluster_cog_a = cluster_cog_a  # Per-subtype parameters
+        self.cluster_cog_b = cluster_cog_b
         
         self.final_f = np.ravel(cluster_f[0]).copy()  # Representative f (ensure 1D)
         self.scalar_K_ = current_scalar_K  # Global scalar_K
@@ -449,7 +484,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         return self
     
     def _update_assignments(self, X_obs, dt, ids, cog, beta, cluster_f, scalar_K, s,
-                            K, t_span, cog_a, cog_b, lambda_cog):
+                            K, t_span, cluster_cog_a, cluster_cog_b, lambda_cog):
         """
         Update cluster assignments using hard assignment based on reconstruction error.
         
@@ -478,10 +513,10 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
                 X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
                 
-                # Compute reconstruction error
+                # Compute reconstruction error using subtype-specific cognitive params
                 error = beta_loss(
                     beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
-                    cog_i, cog_a, cog_b, theta_cluster, lambda_cog
+                    cog_i, cluster_cog_a[subtype], cluster_cog_b[subtype], theta_cluster, lambda_cog
                 )
                 
                 if error < best_error:
@@ -494,7 +529,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
 
 
     def _update_assignments_likelihood(self, X_obs, dt, ids, cog, beta, cluster_f, 
-                                   cluster_scalar_K, s, K, t_span, cog_a, cog_b, 
+                                   scalar_K, s, K, t_span, cluster_cog_a, cluster_cog_b, 
                                    lambda_cog, error_scale=1.0):
         """Probabilistic assignments assuming Gaussian error distribution."""
         n_patients = len(np.unique(ids))
@@ -516,6 +551,11 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 f_cluster = np.ravel(cluster_f[subtype])
                 theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
                 X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
+                
+                error = beta_loss(
+                    beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
+                    cog_i, cluster_cog_a[subtype], cluster_cog_b[subtype], theta_cluster, lambda_cog
+                )
                 
                 error = beta_loss(
                     beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
@@ -757,19 +797,35 @@ def fit_subtyping_em_with_assignments(
     kwargs['rng'] = rng
     kwargs['initial_assignments'] = initial_assignments
     
-    em = SubtypingEM(**kwargs)
-    em.fit(X=X, y=None)
-    
-    result = {
-        'run_index': run_index,
-        'model': em,
-        'beta_history': em.beta_history,
-        'lse_history': em.lse_history,
-        'assignment_history': em.assignment_history,
-        'final_assignments': em.final_assignments,
-        'initial_assignments': initial_assignments,
-        'final_lse': em.lse_history[-1] if len(em.lse_history) > 0 else np.inf,
-    }
+    try:
+        em = SubtypingEM(**kwargs)
+        em.fit(X=X, y=None)
+        
+        result = {
+            'run_index': run_index,
+            'model': em,
+            'beta_history': em.beta_history,
+            'lse_history': em.lse_history,
+            'assignment_history': em.assignment_history,
+            'final_assignments': em.final_assignments,
+            'initial_assignments': initial_assignments,
+            'final_lse': em.lse_history[-1] if len(em.lse_history) > 0 else np.inf,
+            'success': True
+        }
+    except Exception as e:
+        # Return a failed result with very high LSE so it won't be selected as best
+        result = {
+            'run_index': run_index,
+            'model': None,
+            'beta_history': None,
+            'lse_history': None,
+            'assignment_history': None,
+            'final_assignments': None,
+            'initial_assignments': initial_assignments,
+            'final_lse': np.inf,  # Very high LSE so it won't be selected
+            'success': False,
+            'error': str(e)
+        }
     
     return result
 
@@ -805,8 +861,10 @@ def run_multiple_initializations_parallel(
         
     Returns
     -------
-    list
-        List of result dictionaries, one per initialization
+    tuple
+        (successful_results, best_idx) where:
+        - successful_results: List of successful result dictionaries (failed runs are filtered out)
+        - best_idx: Index of best result within successful_results list
     """
     from joblib import Parallel, delayed
     
@@ -832,8 +890,26 @@ def run_multiple_initializations_parallel(
     # Run in parallel
     results = Parallel(n_jobs=n_jobs, prefer=prefer)(jobs)
     
-    # Find best result by final LSE
-    best_idx = np.argmin([r['final_lse'] for r in results])
+    # Filter out failed results
+    successful_results = [r for r in results if r.get('success', True)]
+    failed_count = len(results) - len(successful_results)
     
-    return results, best_idx
+    if failed_count > 0:
+        print(f"Warning: {failed_count} out of {n_initializations} initializations failed")
+        # Print error messages for failed runs
+        for r in results:
+            if not r.get('success', True):
+                print(f"  Run {r['run_index']} failed: {r.get('error', 'Unknown error')}")
+    
+    if len(successful_results) == 0:
+        raise RuntimeError("All initializations failed! Check error messages above.")
+    
+    # Find best result by final LSE (only from successful runs)
+    best_idx_in_successful = np.argmin([r['final_lse'] for r in successful_results])
+    best_result = successful_results[best_idx_in_successful]
+    best_idx_original = best_result['run_index']
+    
+    print(f"Best initialization: run {best_idx_original} with LSE={best_result['final_lse']:.6f}")
+    
+    return successful_results, best_idx_in_successful
 

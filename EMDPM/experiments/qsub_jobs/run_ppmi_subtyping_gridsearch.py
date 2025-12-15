@@ -137,14 +137,24 @@ X_train, X_val = train_test_split(X, test_size=0.2, random_state=75)
 # lambda_jsd: 0.15
 # lambda_beta: 0.1
 
+
+# Parameters:
+#   lambda_f: 0.5
+#   lambda_cog: 0.2
+#   lambda_scalar: 0.8
+#   lambda_jsd: 0.2
+#   lambda_beta: 0.1
+
 # Define parameter grid
 param_grid = {
-    "lambda_f": [0.5, 0.6, 0.7], #,[0.5, 1.0, 1.5],
-    "lambda_cog": [0.1], #[0.01, 0.05, 0.1],
-    "lambda_scalar": [0.2, 0.3, 0.4], #[0.1, 0.3, 0.5],
-    "lambda_jsd": [0.1, 0.15, 0.2], #[0.0, 0.05, 0.1, 0.15],
-    "lambda_beta": [0.1] #[0.05, 0.1, 0.15, 0.2],
+    "lambda_f": [0.6], #,[0.5, 1.0, 1.5],
+    "lambda_cog": [0.2], #[0.01, 0.05, 0.1],
+    "lambda_scalar": [1.1], #[0.1, 0.3, 0.5],
+    "lambda_jsd": [0.0, 0.1, 0.5, 1.0, 5.0, 10.0], #[0.0, 0.05, 0.1, 0.15],
+    "lambda_beta": [0.0, 0.01, 0.1, 1.0] #[0.05, 0.1, 0.15, 0.2],
 }
+
+
 
 # Create all combinations
 param_names = list(param_grid.keys())
@@ -176,7 +186,7 @@ subtyping_em = SubtypingEM(
     initial_f=f_init,
     n_subtypes=n_subtypes,
     jac_toggle=True,
-    max_iter=30,
+    max_iter=100,
     t_max=t_max,
     step=0.01,
     epsilon=1e-2,
@@ -211,11 +221,9 @@ val_dt = np.concatenate(val_dt_list)
 val_ids = np.concatenate(val_ids_list)
 val_cog = np.vstack(val_cog_list)
 
-# Compute assignments for validation set
+# Compute assignments for validation set using per-subtype cognitive parameters
 val_assignments = []
 val_unique_ids = np.unique(val_ids)
-val_cog_a = subtyping_em.cog_regression_history[:-1, -1]
-val_cog_b = subtyping_em.cog_regression_history[-1, -1]
 
 for idx, patient_id in enumerate(val_unique_ids):
     mask = (val_ids == patient_id)
@@ -233,10 +241,14 @@ for idx, patient_id in enumerate(val_unique_ids):
         theta_cluster = np.concatenate([f_cluster, subtyping_em.final_s, [subtyping_em.final_scalar_K]])
         X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, subtyping_em.t_span, subtyping_em.final_scalar_K)
         
+        # Use subtype-specific cognitive parameters
+        cog_a_subtype = subtyping_em.cluster_cog_a[subtype]
+        cog_b_subtype = subtyping_em.cluster_cog_b[subtype]
+        
         # Compute reconstruction error
         error = beta_loss(
             beta_i, X_obs_i, dt_i, X_pred_cluster, subtyping_em.t_span,
-            cog_i, val_cog_a, val_cog_b, theta_cluster, subtyping_em.lambda_cog
+            cog_i, cog_a_subtype, cog_b_subtype, theta_cluster, subtyping_em.lambda_cog
         )
         
         if error < best_error:
@@ -245,12 +257,12 @@ for idx, patient_id in enumerate(val_unique_ids):
     
     val_assignments.append(best_subtype)
 
-out_dir = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results"
+out_dir = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/ppmi_gridsearch_refined_fine"
 os.makedirs(out_dir, exist_ok=True)
 
 # Create filename with parameter values for easy identification
 param_str = "_".join([f"{name}{val:.3f}".replace(".", "p") for name, val in params.items()])
-out_path = os.path.join(out_dir, f"PPMI_subtyping_grid_{current_candidate:03d}_{param_str}.npz")
+out_path = os.path.join(out_dir, f"PPMI_subtyping_grid_betajsd_{current_candidate:03d}_{param_str}.npz")
 
 # Get unique patient IDs for train and val sets
 train_ids = [p["id"] for p in X_train]
@@ -264,7 +276,7 @@ val_assignments_array = np.array(val_assignments)
 
 np.savez(out_path,
          theta_history=np.array(subtyping_em.theta_history),
-         cog_history=np.array(subtyping_em.cog_regression_history),
+         cog_history=np.array(subtyping_em.cog_regression_history),  # 3D: (n_subtypes, n_cog_features+1, max_iter)
          beta_history=np.array(subtyping_em.beta_history),
          lse_history=np.array(subtyping_em.lse_history),
          assignment_history=np.array(subtyping_em.assignment_history),
@@ -278,6 +290,8 @@ np.savez(out_path,
          val_ids=all_val_ids,
          final_assignments=subtyping_em.final_assignments,
          cluster_f=np.array(subtyping_em.cluster_f),
+         cluster_cog_a=np.array(subtyping_em.cluster_cog_a),  # (n_subtypes, n_cog_features)
+         cluster_cog_b=np.array(subtyping_em.cluster_cog_b),  # (n_subtypes,)
          final_scalar_K=subtyping_em.final_scalar_K,
          final_s=subtyping_em.final_s,
          # Grid search parameters
