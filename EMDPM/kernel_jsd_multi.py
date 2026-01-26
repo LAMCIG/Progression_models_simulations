@@ -55,7 +55,7 @@ class KernelJSDMulti:
         
 
         M = np.mean(densities, axis=0)
-        M = M + self.eps
+        M = M + self.eps # in case 0
         
         jsd = 0.0
         for P in densities:
@@ -73,11 +73,11 @@ class KernelJSDMulti:
         # Add epsilon for numerical stability
         densities = [P + self.eps for P in densities]
         
-        # Compute mixture distribution M = (1/N) Σᵢ Pᵢ
+        # compute mixture distribution M = (1/N) * sum(P_i)
         M = np.mean(densities, axis=0)
         M = M + self.eps
         
-        # Compute coefficients for each distribution: (1/N) * log(Pᵢ / M)
+        # compute coefficients for each distribution: (1/N) * log(P_i / M)
         coeffs = []
         for P in densities:
             coeff = (1.0 / self.n_distributions) * np.log(P / M)
