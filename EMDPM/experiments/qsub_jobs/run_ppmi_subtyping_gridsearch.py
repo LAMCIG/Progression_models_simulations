@@ -147,11 +147,11 @@ X_train, X_val = train_test_split(X, test_size=0.2, random_state=75)
 
 # Define parameter grid
 param_grid = {
-    "lambda_f": [0.6], #,[0.5, 1.0, 1.5],
-    "lambda_cog": [0.2], #[0.01, 0.05, 0.1],
+    "lambda_f": [0.4, 0.5, 0.6], #,[0.5, 1.0, 1.5],
+    "lambda_cog": [0.2, 0.3], #[0.01, 0.05, 0.1],
     "lambda_scalar": [1.1], #[0.1, 0.3, 0.5],
-    "lambda_jsd": [0.0, 0.1, 0.5, 1.0, 5.0, 10.0], #[0.0, 0.05, 0.1, 0.15],
-    "lambda_beta": [0.0, 0.01, 0.1, 1.0] #[0.05, 0.1, 0.15, 0.2],
+    "lambda_jsd": [0.0, 0.1, 0.5, 1.0, 5.0, 10.0, 50.0, 100.0, 500.0, 1000.0], #[0.0, 0.05, 0.1, 0.15],
+    "lambda_beta": [0.0] #[0.05, 0.1, 0.15, 0.2],
 }
 
 
@@ -167,7 +167,9 @@ print(f"Total parameter combinations: {total_combinations}")
 print(f"Current candidate: {current_candidate}")
 
 if current_candidate >= total_combinations:
-    raise ValueError(f"candidate {current_candidate} >= total combinations {total_combinations}")
+    # Exit silently for out-of-range candidates (PBS array may be larger than needed)
+    import sys
+    sys.exit(0)  # Exit gracefully so PBS doesn't treat it as a failure
 
 # Get parameters for this candidate
 params = {name: param_combinations[current_candidate][i] 
@@ -257,7 +259,7 @@ for idx, patient_id in enumerate(val_unique_ids):
     
     val_assignments.append(best_subtype)
 
-out_dir = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/ppmi_gridsearch_refined_fine"
+out_dir = "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/ppmi_gridsearch_jsd"
 os.makedirs(out_dir, exist_ok=True)
 
 # Create filename with parameter values for easy identification

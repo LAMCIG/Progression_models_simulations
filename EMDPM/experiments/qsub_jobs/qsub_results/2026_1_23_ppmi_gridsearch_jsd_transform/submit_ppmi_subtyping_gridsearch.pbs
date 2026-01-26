@@ -1,0 +1,17 @@
+#!/bin/bash
+#PBS -N ppmi_subtyping_grid
+#PBS -l nodes=4:ppn=20
+#PBS -l walltime=24:00:00
+#PBS -l mem=40gb
+#PBS -j oe
+#PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/2026_1_23_ppmi_gridsearch_jsd_transform/logs/ppmi_subtyping_grid.o%j-%a
+#PBS -m abe
+# 144 parameter combinations (0-143)
+#PBS -t 0-95%20
+
+cd $PBS_O_WORKDIR
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate base
+python /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/2026_1_23_ppmi_gridsearch_jsd_transform/run_ppmi_subtyping_gridsearch.py \
+  --candidate $PBS_ARRAYID
+

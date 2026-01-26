@@ -4,8 +4,8 @@ import numpy as np
 class KernelJSD:
     """
     Kernel-based Jensen-Shannon Divergence for comparing beta distributions.
-    Used to prevent beta values from clumping into narrow bands by encouraging
-    separation between subtypes (for 2 subtypes).
+    Used to encourage similar beta distributions between subtypes by minimizing
+    JSD (for 2 subtypes).
     """
 
     def __init__(self, alpha, beta, value_range=(0, 1), bandwidth=None, n_bins=None):

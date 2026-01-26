@@ -6,7 +6,9 @@
 #PBS -j oe
 #PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_logs/
 #PBS -m abe
-#PBS -t 0-431%20
+# Large range - Python script will exit gracefully for out-of-range candidates
+# No need to update this when changing param_grid!
+#PBS -t 0-9999%20
 
 cd $PBS_O_WORKDIR
 source ~/miniconda3/etc/profile.d/conda.sh

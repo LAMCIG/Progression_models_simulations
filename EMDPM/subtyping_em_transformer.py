@@ -134,11 +134,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         beta_var = max(beta_var, 1e-8)  # Add small epsilon to avoid division by zero
         
         K = self.K
-
         rng = self.rng
-        self.t_span = np.linspace(0, self.t_max, int(self.t_max / self.step)) # I dont know why this is a class variable might be for plotting
-        n_biomarkers = np.size(X_obs,1) # rows = observations, columns = biomarkers
-        
         n_obs = X_obs.shape[0]
         
         if cog.ndim == 1: # cog.shape = (n_obs, n_cog_features)
@@ -190,25 +186,27 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         for subtype in range(self.n_subtypes):
             cog_regression_history[subtype, :, 0] = np.concatenate([initial_cog_a, [initial_cog_b]])
         
-        ## Compute Initial LSE
+        ## Compute Initial LSE (pure reconstruction error, no regularization)
         X_pred = solve_system(initial_x0, initial_f, K, self.t_span, scalar_K=current_scalar_K)
         initial_lse = 0.0
         
         for idx, pid in enumerate(np.unique(ids)): # each iter will be like (idx, pid)
             mask = (ids == pid)
-            # print(np.size(mask), X_obs.shape, dt.shape, cog.shape)
             X_obs_i = X_obs[mask,:]
             dt_i = dt[mask]
-            cog_i = cog[mask,:]
             beta_i = initial_beta[idx]
             
-            if current_jac:
-                res, _ = beta_loss_jac(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, K, self.lambda_cog,
-                                      lambda_beta=self.lambda_beta, beta_mean=beta_mean, beta_var=beta_var)
-            else:
-                res = beta_loss(beta_i, X_obs_i, dt_i, X_pred, self.t_span, cog_i, initial_cog_a, initial_cog_b, initial_theta, self.lambda_cog,
-                               lambda_beta=self.lambda_beta, beta_mean=beta_mean, beta_var=beta_var)
-            initial_lse += res
+            # Compute pure reconstruction error (no regularization)
+            t_pred_i = dt_i + beta_i
+            
+            X_interp_i = np.array([
+                np.interp(t_pred_i, self.t_span, initial_s[b] * X_pred[b])
+                for b in range(n_biomarkers)
+            ])
+            
+            X_obs_i_T = X_obs_i.T  # (n_biomarkers, n_obs_i)
+            residuals = X_obs_i_T - X_interp_i
+            initial_lse += np.sum(residuals ** 2)
             
         lse_history[0] = initial_lse
         
@@ -434,6 +432,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         self.theta_history = theta_history[:, 0:hist_idx+1]
         self.beta_history = beta_history[:, 0:hist_idx+1]
         self.lse_history = lse_history[0:hist_idx+1]
+        self.lse_final = lse
+
         self.cog_regression_history = cog_regression_history[:, 0:hist_idx+1]
         self.assignment_history = assignment_history[:, 0:hist_idx+1]
         
@@ -557,11 +557,6 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                     cog_i, cluster_cog_a[subtype], cluster_cog_b[subtype], theta_cluster, lambda_cog
                 )
                 
-                error = beta_loss(
-                    beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
-                    cog_i, cog_a, cog_b, theta_cluster, lambda_cog
-                )
-                
                 # Gaussian log-likelihood: -0.5 * (error/scale)^2
                 log_likelihoods[subtype] = -0.5 * (error / error_scale) ** 2
             
@@ -640,9 +635,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             # Step size: smaller for later steps (fine-tuning)
             step_size = self.lambda_jsd * 0.01 * (1.0 / (step + 1))
                         
-            # Apply gradient step to maximize JSD
-            beta_optimized[idx_subtype_0] += step_size * d_alpha
-            beta_optimized[idx_subtype_1] += step_size * d_beta
+            # Apply gradient step to MINIMIZE JSD (make distributions similar)
+            beta_optimized[idx_subtype_0] -= step_size * d_alpha
+            beta_optimized[idx_subtype_1] -= step_size * d_beta
             
             # Clip to valid range
             beta_optimized = np.clip(beta_optimized, 0, t_max)
@@ -681,34 +676,114 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 print(f"  Fitted subtype {fitted_subtype} -> True subtype {self.subtype_mapping[fitted_subtype]}")
         return self.subtype_mapping
     
-    def transform(self, X: list[dict]) -> np.ndarray:
+    def transform(self, X: list[dict], use_cognitive_prior: bool = True) -> np.ndarray:
         """
-        Estimate beta values for a list of patient dicts.
+        Estimate beta values (timeshift) and subtype assignments for a list of patient dicts.
+        
+        For each patient, this method:
+        1. Determines the best subtype assignment based on reconstruction error
+        2. Uses subtype-specific parameters to estimate timeshift (beta)
+        3. Returns both beta and subtype assignment in a structured array
+        
+        Parameters
+        ----------
+        X : list[dict]
+            List of patient dictionaries, each containing:
+            - 'X_obs': (n_visits, n_biomarkers) biomarker observations
+            - 'dt': (n_visits,) time deltas
+            - 'cog': (n_visits, n_cog_features) cognitive features
+        
+        Parameters
+        ----------
+        X : list[dict]
+            Patient dictionaries.
+        use_cognitive_prior : bool, default=True
+            If False, ignore cognitive priors during transform (lambda_cog=0).
+
+        Returns
+        -------
+        np.ndarray
+            Structured array with dtype [('beta', 'f8'), ('subtype', 'i4')]
+            containing timeshift (beta) and subtype assignment for each patient.
         """
-        beta_vals = []
-        for p in tqdm(X, desc="Estimating beta values"):
+        if not hasattr(self, 'cluster_f') or not hasattr(self, 'cluster_cog_a'):
+            raise RuntimeError("fit() must be called before transform()")
+        
+        n_patients = len(X)
+        n_biomarkers = X[0]["X_obs"].shape[1]
+        effective_lambda_cog = self.lambda_cog if use_cognitive_prior else 0.0
+        
+        # Create structured array for results
+        dtype = [('beta', 'f8'), ('subtype', 'i4')]
+        results = np.zeros(n_patients, dtype=dtype)
+        
+        for idx, p in enumerate(tqdm(X, desc="Estimating beta and subtype assignments")):
+            X_obs_i = p["X_obs"]
+            dt_i = p["dt"]
             cog_i = p["cog"]
             if cog_i.ndim == 1:
                 cog_i = cog_i.reshape(-1, 1)
 
+            # Step 1: Determine best subtype assignment
+            # Try each subtype and find the one with lowest reconstruction error
+            best_error = np.inf
+            best_subtype = 0
+            best_beta_guess = 0.0
+            
+            for subtype in range(self.n_subtypes):
+                f_cluster = np.ravel(self.cluster_f[subtype])
+                theta_cluster = np.concatenate([f_cluster, self.final_s, [self.final_scalar_K]])
+                X_pred_cluster = solve_system(
+                    np.zeros(n_biomarkers), f_cluster, self.K, 
+                    self.t_span, self.final_scalar_K
+                )
+                
+                beta_guess = 10.0
+                # Compute reconstruction error using subtype-specific cognitive params
+                error = beta_loss(
+                    beta_guess, X_obs_i, dt_i, X_pred_cluster, self.t_span,
+                    cog_i, self.cluster_cog_a[subtype], self.cluster_cog_b[subtype], 
+                    theta_cluster, effective_lambda_cog
+                )
+                
+                if error < best_error:
+                    best_error = error
+                    best_subtype = subtype
+                    best_beta_guess = beta_guess
+            
+            # Step 2: Compute beta using the assigned subtype's parameters
+            f_assigned = np.ravel(self.cluster_f[best_subtype])
+            theta_assigned = np.concatenate([f_assigned, self.final_s, [self.final_scalar_K]])
+            X_pred_assigned = solve_system(
+                np.zeros(n_biomarkers), f_assigned, self.K, 
+                self.t_span, self.final_scalar_K
+            )
+            
             beta_i = estimate_beta_for_patient(
-                beta_i=0.0,
-                X_obs_i=p["X_obs"],
-                dt_i=p["dt"],
-                X_pred=self.X_pred,
+                beta_i=best_beta_guess,
+                X_obs_i=X_obs_i,
+                dt_i=dt_i,
+                X_pred=X_pred_assigned,
                 t_span=self.t_span,
                 cog_i=cog_i,
-                cog_a=self.cog_a,
-                cog_b=self.cog_b,
-                theta=self.theta,
+                cog_a=self.cluster_cog_a[best_subtype],
+                cog_b=self.cluster_cog_b[best_subtype],
+                theta=theta_assigned,
                 K=self.K,
-                lambda_cog=self.lambda_cog,
+                lambda_cog=effective_lambda_cog,
                 use_jacobian=self.jac_toggle,
                 t_max=self.t_max
             )
-            beta_vals.append(beta_i)
-        self.beta_val = beta_vals
-        return np.array(beta_vals)
+            
+            # Store results
+            results[idx]['beta'] = beta_i
+            results[idx]['subtype'] = best_subtype
+        
+        # Store for backward compatibility
+        self.beta_val = results['beta']
+        self.transform_assignments = results['subtype']
+        
+        return results
 
 
     def score(self, X: dict, y=None) -> float:
@@ -743,23 +818,6 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             lse += np.sum((X_obs_i - X_interp) ** 2)
         return lse
     
-    def _ensure_2d_cog(c, n_rows_expected: int) -> np.ndarray:
-        c = np.asarray(c)
-        # (n_obs,) -> (n_obs, 1)
-        if c.ndim == 1:
-            c = c.reshape(-1, 1)
-
-        # (1, n_obs) -> (n_obs, 1)
-        if c.ndim == 2 and c.shape[0] == 1 and c.shape[1] == n_rows_expected:
-            c = c.T
-
-        # Final check: first dim must match number of observations for this patient
-        if c.ndim != 2 or c.shape[0] != n_rows_expected:
-            raise ValueError(
-                f"cog shape mismatch; expected first dim {n_rows_expected}, got {c.shape}"
-            )
-        return c
-
 
 def fit_subtyping_em_with_assignments(
     X: list,
@@ -810,7 +868,7 @@ def fit_subtyping_em_with_assignments(
             'final_assignments': em.final_assignments,
             'initial_assignments': initial_assignments,
             'final_lse': em.lse_history[-1] if len(em.lse_history) > 0 else np.inf,
-            'success': True
+                'success': True
         }
     except Exception as e:
         # Return a failed result with very high LSE so it won't be selected as best
@@ -826,8 +884,8 @@ def fit_subtyping_em_with_assignments(
             'success': False,
             'error': str(e)
         }
-    
-    return result
+        
+        return result
 
 
 def run_multiple_initializations_parallel(
@@ -913,3 +971,10 @@ def run_multiple_initializations_parallel(
     
     return successful_results, best_idx_in_successful
 
+
+def compute_mixture_assignments(logits):
+    pass
+
+
+def mix_subtype_embeddings(subtype_embeds, assignment_probs):
+    pass

@@ -38,9 +38,9 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
         bandwidth=jsd_bandwidth,
     )
     
-    # JSD loss: we want to MAXIMIZE JSD, so minimize -JSD
+    # JSD loss: we want to MINIMIZE JSD (make distributions similar)
     jsd_value = jsd_calc.jsd()
-    jsd_loss = -lambda_jsd * jsd_value
+    jsd_loss = lambda_jsd * jsd_value
     
     # Get derivatives
     d_alpha, d_beta = jsd_calc.jsd_derivatives()
@@ -51,12 +51,12 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
         # Find index of this patient in subtype 0 array
         subtype_0_indices = np.where(assignments == 0)[0]
         local_idx = np.where(subtype_0_indices == patient_idx)[0][0]
-        jsd_grad = -lambda_jsd * d_alpha[local_idx]
+        jsd_grad = lambda_jsd * d_alpha[local_idx]
     else:  # patient_subtype == 1
         # Find index of this patient in subtype 1 array
         subtype_1_indices = np.where(assignments == 1)[0]
         local_idx = np.where(subtype_1_indices == patient_idx)[0][0]
-        jsd_grad = -lambda_jsd * d_beta[local_idx]
+        jsd_grad = lambda_jsd * d_beta[local_idx]
     
     return jsd_loss, jsd_grad
 
@@ -411,7 +411,7 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
                 bandwidth=jsd_bandwidth,
             )
             jsd_value = jsd_calc.jsd()
-            jsd_loss = -lambda_jsd * jsd_value
+            jsd_loss = lambda_jsd * jsd_value
             
             # Get JSD gradients
             d_alpha, d_beta = jsd_calc.jsd_derivatives()
@@ -421,10 +421,10 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
             subtype_1_indices = np.where(assignments == 1)[0]
             
             for local_idx, patient_idx in enumerate(subtype_0_indices):
-                gradient[patient_idx] += -lambda_jsd * d_alpha[local_idx]
+                gradient[patient_idx] += lambda_jsd * d_alpha[local_idx]
             
             for local_idx, patient_idx in enumerate(subtype_1_indices):
-                gradient[patient_idx] += -lambda_jsd * d_beta[local_idx]
+                gradient[patient_idx] += lambda_jsd * d_beta[local_idx]
             
             total_loss += jsd_loss
     
@@ -487,9 +487,9 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
     Returns
     -------
     tuple
-        (optimized_beta, total_lse) where:
+        (optimized_beta, reconstruction_lse) where:
         - optimized_beta: np.ndarray (n_patients,) - optimized beta values
-        - total_lse: float - total sum of squared errors (residuals + clinical prior + jsd)
+        - reconstruction_lse: float - pure reconstruction error (X_obs - X_pred)^2 only, no regularization
     """
     unique_ids = np.unique(ids)
     n_patients = len(unique_ids)
@@ -532,8 +532,6 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
             lambda_beta, beta_mean, beta_var
         )
         return grad
-
-
     
     # optimize all betas simultaneously
     result = minimize(
@@ -547,14 +545,32 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
     
     optimized_beta = result.x
     
-    # compute final LSE (residuals + clinical prior + jsd + l2)
-    total_lse, _ = _vectorized_beta_loss_and_grad(
-        optimized_beta, X_obs, dt, ids, cog, t_span,
-        cluster_f, scalar_K, s, assignments, K,
-        cluster_cog_a, cluster_cog_b, lambda_cog, lambda_jsd, t_max,
-        X_pred_by_cluster,
-        jsd_n_bins, jsd_bandwidth, jsd_value_range,
-        lambda_beta, beta_mean, beta_var
-    )
+    # Compute pure reconstruction error (LSE) for model comparison
+    # This is ONLY (X_obs - X_pred)^2, excluding all regularization terms
+    reconstruction_lse = 0.0
     
-    return optimized_beta, total_lse
+    for idx, patient_id in enumerate(unique_ids):
+        mask = (ids == patient_id)
+        X_obs_i = X_obs[mask, :]  # (n_obs_i, n_biomarkers)
+        dt_i = dt[mask]  # (n_obs_i,)
+        beta_i = optimized_beta[idx]
+        
+        # Get cluster-specific parameters
+        subtype_i = assignments[idx]
+        X_pred_cluster_i = X_pred_by_cluster[subtype_i]
+        
+        # Compute predicted times
+        t_pred_i = dt_i + beta_i
+        
+        # Interpolate predicted trajectories at observation times
+        X_interp_i = np.array([
+            np.interp(t_pred_i, t_span, s[b] * X_pred_cluster_i[b])
+            for b in range(n_biomarkers)
+        ])
+        
+        # Compute reconstruction error: (X_obs - X_pred)^2
+        X_obs_i_T = X_obs_i.T  # (n_biomarkers, n_obs_i)
+        residuals = X_obs_i_T - X_interp_i
+        reconstruction_lse += np.sum(residuals ** 2)
+    
+    return optimized_beta, reconstruction_lse
