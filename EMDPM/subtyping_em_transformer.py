@@ -7,7 +7,7 @@ from .optimizer_theta_globals import fit_theta_globals
 from .optimizer_theta_cluster import fit_theta_cluster
 from .optimizer_beta import estimate_beta_for_patient, estimate_beta, beta_loss, beta_loss_jac
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
-from .kernel_jsd import KernelJSD
+from .kernel_jsd_multi import KernelJSDMulti
 from .utils import *
 
 class SubtypingEM(BaseEstimator, TransformerMixin):
@@ -592,18 +592,35 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         np.ndarray
             Redistributed beta values
         """
-        if self.n_subtypes != 2:
+        # if self.n_subtypes != 2:
+        #     return beta
+
+        if self.n_subtypes < 2:
             return beta
         
         # Extract betas for each subtype
-        subtype_0_betas = beta[assignments == 0]
-        subtype_1_betas = beta[assignments == 1]
+        # subtype_0_betas = beta[assignments == 0]
+        # subtype_1_betas = beta[assignments == 1]
         
-        if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
+        # if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
+        #     return beta
+        
+        # idx_subtype_0 = np.where(assignments == 0)[0]
+        # idx_subtype_1 = np.where(assignments == 1)[0]
+
+        unique_subtypes = np.unique(assignments)
+        if len(unique_subtypes) < 2:
             return beta
-        
-        idx_subtype_0 = np.where(assignments == 0)[0]
-        idx_subtype_1 = np.where(assignments == 1)[0]
+
+        # Extract betas and indices for each subtype
+        subtype_betas_list = []
+        subtype_indices_list = []
+        for st in unique_subtypes:
+            subtype_betas = beta[assignments == st]
+            if len(subtype_betas) == 0:
+                return beta
+            subtype_betas_list.append(subtype_betas)
+            subtype_indices_list.append(np.where(assignments == st)[0])
         
         beta_optimized = beta.copy()
         jsd_before = None
@@ -612,41 +629,36 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         n_jsd_steps = max(1, int(self.lambda_jsd * 0.1)) 
         
         for step in range(n_jsd_steps):
-            # Extract current betas for each subtype
-            subtype_0_current = beta_optimized[idx_subtype_0]
-            subtype_1_current = beta_optimized[idx_subtype_1]
+            # Extract current betas for all subtypes
+            current_subtype_betas = [beta_optimized[idx] for idx in subtype_indices_list]
             
             # Compute JSD and derivatives
-            jsd_calc = KernelJSD(
-                alpha=subtype_0_current,
-                beta=subtype_1_current,
+            jsd_calc = KernelJSDMulti(
+                distributions_list=current_subtype_betas,
                 value_range=(0, t_max)
             )
             
             if step == 0:
                 jsd_before = jsd_calc.jsd()
             
-            d_alpha, d_beta = jsd_calc.jsd_derivatives()
-            
-            # Adaptive step size - normalize gradients to prevent overshooting
-            grad_norm_alpha = np.linalg.norm(d_alpha) if len(d_alpha) > 0 else 1.0
-            grad_norm_beta = np.linalg.norm(d_beta) if len(d_beta) > 0 else 1.0
+            gradients_list = jsd_calc.jsd_derivatives()  # Returns list of gradients
             
             # Step size: smaller for later steps (fine-tuning)
             step_size = self.lambda_jsd * 0.01 * (1.0 / (step + 1))
                         
             # Apply gradient step to MINIMIZE JSD (make distributions similar)
-            beta_optimized[idx_subtype_0] -= step_size * d_alpha
-            beta_optimized[idx_subtype_1] -= step_size * d_beta
+            for subtype_idx, subtype_indices in enumerate(subtype_indices_list):
+                d_subtype = gradients_list[subtype_idx]
+                beta_optimized[subtype_indices] -= step_size * d_subtype
             
             # Clip to valid range
             beta_optimized = np.clip(beta_optimized, 0, t_max)
         
         # Diagnostic output
         if self.verbose >= 2 and iteration is not None and iteration % 10 == 0:
-            jsd_after_calc = KernelJSD(
-                alpha=beta_optimized[idx_subtype_0],
-                beta=beta_optimized[idx_subtype_1],
+            current_subtype_betas_after = [beta_optimized[idx] for idx in subtype_indices_list]
+            jsd_after_calc = KernelJSDMulti(
+                distributions_list=current_subtype_betas_after,
                 value_range=(0, t_max)
             )
             jsd_after = jsd_after_calc.jsd()

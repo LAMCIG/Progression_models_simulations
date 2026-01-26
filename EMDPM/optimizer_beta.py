@@ -3,12 +3,16 @@ import pandas as pd
 from scipy.optimize import minimize
 from .utils import solve_system
 from .kernel_jsd import KernelJSD
+from .kernel_jsd_multi import KernelJSDMulti
+
 def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndarray, 
                        patient_idx: int, lambda_jsd: float, t_max: float,
                        jsd_n_bins: int = None, jsd_bandwidth: float = None,
                        jsd_value_range: tuple = None) -> tuple:
 
-    if lambda_jsd == 0.0 or len(np.unique(assignments)) != 2:
+    # if lambda_jsd == 0.0 or len(np.unique(assignments)) != 2:
+    #     return 0.0, 0.0
+    if lambda_jsd == 0.0 or len(np.unique(assignments)) < 2:
         return 0.0, 0.0
     
     # Create temporary beta array with updated value for this patient
@@ -16,10 +20,18 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
     beta_temp[patient_idx] = beta_i
     
     # Extract betas for each subtype
-    subtype_0_betas = beta_temp[assignments == 0]
-    subtype_1_betas = beta_temp[assignments == 1]
+    # subtype_0_betas = beta_temp[assignments == 0]
+    # subtype_1_betas = beta_temp[assignments == 1]
     
-    if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
+    # if len(subtype_0_betas) == 0 or len(subtype_1_betas) == 0:
+    #     return 0.0, 0.0
+
+    unique_subtypes = np.unique(assignments)
+    if len(unique_subtypes) < 2:
+        return 0.0, 0.0
+
+    subtype_betas_list = [beta_temp[assignments == st] for st in unique_subtypes]
+    if any(len(betas) == 0 for betas in subtype_betas_list):
         return 0.0, 0.0
     
     # Determine JSD value range
@@ -29,10 +41,17 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
     # Compute JSD and derivatives
     # Adjustable parameters:
     # - n_bins: More bins = finer resolution but can be noisy. Fewer = smoother but less precise.
-    # - bandwidth: Larger = smoother density. Smaller = more peaked. None = auto (Silverman's rule).
-    jsd_calc = KernelJSD(
-        alpha=subtype_0_betas,
-        beta=subtype_1_betas,
+    # - bandwidth: Larger = smoother density. Smaller = more peaked. None = Silverman's rule
+    # jsd_calc = KernelJSD(
+    #     alpha=subtype_0_betas,
+    #     beta=subtype_1_betas,
+    #     value_range=jsd_value_range,
+    #     n_bins=jsd_n_bins,
+    #     bandwidth=jsd_bandwidth,
+    # )
+
+    jsd_calc = KernelJSDMulti( 
+        distributions_list=subtype_betas_list,
         value_range=jsd_value_range,
         n_bins=jsd_n_bins,
         bandwidth=jsd_bandwidth,
@@ -43,20 +62,26 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
     jsd_loss = lambda_jsd * jsd_value
     
     # Get derivatives
-    d_alpha, d_beta = jsd_calc.jsd_derivatives()
+    # d_alpha, d_beta = jsd_calc.jsd_derivatives()
     
+    gradients_list = jsd_calc.jsd_derivatives() # List of gradients, one per subtype
     # Find which derivative corresponds to this patient
     patient_subtype = assignments[patient_idx]
-    if patient_subtype == 0:
-        # Find index of this patient in subtype 0 array
-        subtype_0_indices = np.where(assignments == 0)[0]
-        local_idx = np.where(subtype_0_indices == patient_idx)[0][0]
-        jsd_grad = lambda_jsd * d_alpha[local_idx]
-    else:  # patient_subtype == 1
-        # Find index of this patient in subtype 1 array
-        subtype_1_indices = np.where(assignments == 1)[0]
-        local_idx = np.where(subtype_1_indices == patient_idx)[0][0]
-        jsd_grad = lambda_jsd * d_beta[local_idx]
+    # if patient_subtype == 0:
+    #     # Find index of this patient in subtype 0 array
+    #     subtype_0_indices = np.where(assignments == 0)[0]
+    #     local_idx = np.where(subtype_0_indices == patient_idx)[0][0]
+    #     jsd_grad = lambda_jsd * d_alpha[local_idx]
+    # else:  # patient_subtype == 1
+    #     # Find index of this patient in subtype 1 array
+    #     subtype_1_indices = np.where(assignments == 1)[0]
+    #     local_idx = np.where(subtype_1_indices == patient_idx)[0][0]
+    #     jsd_grad = lambda_jsd * d_beta[local_idx]
+
+    subtype_idx = np.where(unique_subtypes == patient_subtype)[0][0]  # Find index in unique_subtypes
+    subtype_indices = np.where(assignments == patient_subtype)[0]
+    local_idx = np.where(subtype_indices == patient_idx)[0][0]
+    jsd_grad = lambda_jsd * gradients_list[subtype_idx][local_idx]
     
     return jsd_loss, jsd_grad
 
@@ -393,38 +418,62 @@ def _vectorized_beta_loss_and_grad(beta_all: np.ndarray, X_obs: np.ndarray, dt: 
         gradient[idx] = grad_i
     
     # Add JSD loss (only computed once across all patients)
-    if lambda_jsd > 0 and len(np.unique(assignments)) == 2:
-        subtype_0_betas = beta_all[assignments == 0]
-        subtype_1_betas = beta_all[assignments == 1]
+    # if lambda_jsd > 0 and len(np.unique(assignments)) == 2:
+    #     subtype_0_betas = beta_all[assignments == 0]
+    #     subtype_1_betas = beta_all[assignments == 1]
         
-        if len(subtype_0_betas) > 0 and len(subtype_1_betas) > 0:
-            # Determine JSD value range
-            if jsd_value_range is None:
-                jsd_value_range = (0, t_max)
+    #     if len(subtype_0_betas) > 0 and len(subtype_1_betas) > 0:
+
+    if lambda_jsd > 0:
+        unique_subtypes = np.unique(assignments)
+        if len(unique_subtypes) >= 2:
+            # Extract betas for each subtype
+            subtype_betas_list = [beta_all[assignments == st] for st in unique_subtypes]
             
+            if all(len(betas) > 0 for betas in subtype_betas_list):
+                # Determine JSD value range
+                if jsd_value_range is None:
+                    jsd_value_range = (0, t_max)
+                
             # Use same JSD parameters as in _jsd_loss_and_grad for consistency
-            jsd_calc = KernelJSD(
-                alpha=subtype_0_betas,
-                beta=subtype_1_betas,
+            # jsd_calc = KernelJSD(
+            #     alpha=subtype_0_betas,
+            #     beta=subtype_1_betas,
+            #     value_range=jsd_value_range,
+            #     n_bins=jsd_n_bins,
+            #     bandwidth=jsd_bandwidth,
+            # )
+
+            jsd_calc = KernelJSDMulti(
+                distributions_list=subtype_betas_list,
                 value_range=jsd_value_range,
                 n_bins=jsd_n_bins,
                 bandwidth=jsd_bandwidth,
             )
+
             jsd_value = jsd_calc.jsd()
             jsd_loss = lambda_jsd * jsd_value
             
-            # Get JSD gradients
-            d_alpha, d_beta = jsd_calc.jsd_derivatives()
+            # # Get JSD gradients
+            # d_alpha, d_beta = jsd_calc.jsd_derivatives()
             
-            # Map gradients back to patient indices
-            subtype_0_indices = np.where(assignments == 0)[0]
-            subtype_1_indices = np.where(assignments == 1)[0]
+            # # Map gradients back to patient indices
+            # subtype_0_indices = np.where(assignments == 0)[0]
+            # subtype_1_indices = np.where(assignments == 1)[0]
             
-            for local_idx, patient_idx in enumerate(subtype_0_indices):
-                gradient[patient_idx] += lambda_jsd * d_alpha[local_idx]
+            # for local_idx, patient_idx in enumerate(subtype_0_indices):
+            #     gradient[patient_idx] += lambda_jsd * d_alpha[local_idx]
             
-            for local_idx, patient_idx in enumerate(subtype_1_indices):
-                gradient[patient_idx] += lambda_jsd * d_beta[local_idx]
+            # for local_idx, patient_idx in enumerate(subtype_1_indices):
+            #     gradient[patient_idx] += lambda_jsd * d_beta[local_idx]
+
+            gradients_list = jsd_calc.jsd_derivatives()  # List of gradients, one per subtype
+
+            for subtype_idx, subtype_id in enumerate(unique_subtypes):
+                subtype_indices = np.where(assignments == subtype_id)[0]
+                for local_idx, patient_idx in enumerate(subtype_indices):
+                    gradient[patient_idx] += lambda_jsd * gradients_list[subtype_idx][local_idx]
+            
             
             total_loss += jsd_loss
     
@@ -559,16 +608,16 @@ def estimate_beta(beta_all: np.ndarray, X_obs: np.ndarray, dt: np.ndarray,
         subtype_i = assignments[idx]
         X_pred_cluster_i = X_pred_by_cluster[subtype_i]
         
-        # Compute predicted times
+        # compute predicted times
         t_pred_i = dt_i + beta_i
         
-        # Interpolate predicted trajectories at observation times
+        # interpolate predicted trajectories at observation times
         X_interp_i = np.array([
             np.interp(t_pred_i, t_span, s[b] * X_pred_cluster_i[b])
             for b in range(n_biomarkers)
         ])
         
-        # Compute reconstruction error: (X_obs - X_pred)^2
+        # compute reconstruction error (X_obs - X_pred)^2
         X_obs_i_T = X_obs_i.T  # (n_biomarkers, n_obs_i)
         residuals = X_obs_i_T - X_interp_i
         reconstruction_lse += np.sum(residuals ** 2)
