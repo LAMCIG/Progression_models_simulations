@@ -803,7 +803,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         Computes timeshifts of validation set using transform,
         evaluates difference between predicted model and obs
         """
-        beta_val = self.transform(X)
+        transform_results = self.transform(X)
+        # Extract 'beta' field from structured array returned by transform()
+        beta_val = transform_results['beta']
         lse = self._compute_val_score(X, beta_val)
         return -lse
     
