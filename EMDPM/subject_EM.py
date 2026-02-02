@@ -61,8 +61,8 @@ class SubjectEM(BaseEstimator, TransformerMixin):
         self.t_span = self._make_t_span()
 
         # use first patient's inits as reference for deltas
-        f0 = np.asarray(X[0]["f_init"], dtype=float).reshape(-1)
-        s0 = np.asarray(X[0]["s_init"], dtype=float).reshape(-1)
+        f0 = np.asarray(X[0]["f_init"]).ravel()  # Ensure 1D
+        s0 = np.asarray(X[0]["s_init"]).ravel()  # Ensure 1D
         scalar_K0 = float(X[0]["scalar_K_init"])
         if f0.shape[0] != n_biomarkers or s0.shape[0] != n_biomarkers:
             raise ValueError(f"Init shapes mismatch: f={f0.shape}, s={s0.shape}, expected ({n_biomarkers},)")

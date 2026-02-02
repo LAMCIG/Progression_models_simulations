@@ -5,7 +5,7 @@ from tqdm import tqdm
 from sklearn.base import BaseEstimator, TransformerMixin
 from .optimizer_theta_globals import fit_theta_globals
 from .optimizer_theta_cluster import fit_theta_cluster
-from .optimizer_beta import estimate_beta_for_patient, estimate_beta, beta_loss, beta_loss_jac
+from .optimizer_beta import estimate_beta_for_patient, estimate_beta, beta_loss, beta_loss_jac, reconstruction_sse
 from .optimizer_cognitive_regression import fit_linear_cog_regression_multi
 from .kernel_jsd_multi import KernelJSDMulti
 from .utils import *
@@ -44,6 +44,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                  
                  # [clustering parmaters]
                  n_subtypes = 2,
+                 assignments_jitter: bool = False,  # sample assignment from p(SSE) instead of argmax
+                 jitter_iter: int = 1,  # when to jitter: every jitter_iter iterations (loop_iter % jitter_iter == 0)
+                 jitter_temperature: float = 1.0,  # softmax temperature: <1 sharper, >1 flatter
                   
                  # [misc options]
                  verbose = 1,
@@ -78,7 +81,10 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         # [clustering params]
         self.n_subtypes = n_subtypes
-        
+        self.assignments_jitter = assignments_jitter
+        self.jitter_iter = jitter_iter
+        self.jitter_temperature = jitter_temperature
+
         # [misc options]
         self.verbose = verbose
         
@@ -230,7 +236,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             cluster_cog_a.append(initial_cog_a.copy())
             cluster_cog_b.append(initial_cog_b)
         
-        # Initialize cluster assignments (use provided or random)
+        # Initialize cluster assignments (use provided, from patient dicts, or random)
         if self.initial_assignments is not None:
             if len(self.initial_assignments) != n_patients:
                 raise ValueError(
@@ -242,6 +248,13 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                     f"initial_assignments must be in range [0, {self.n_subtypes})"
                 )
             assignments = self.initial_assignments.copy()
+        elif all("initial_subtype" in p for p in X):
+            # Read initial_subtype from patient dictionaries
+            assignments = np.array([p["initial_subtype"] for p in X], dtype=int)
+            if np.any(assignments < 0) or np.any(assignments >= self.n_subtypes):
+                raise ValueError(
+                    f"initial_subtype values must be in range [0, {self.n_subtypes})"
+                )
         else:
             assignments = rng.integers(0, self.n_subtypes, size=n_patients)
         
@@ -260,33 +273,46 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 def update(self, n=1):
                     pass
             pbar = DummyProgressBar()
+
+        self.assignment_probabilities_ = None
             
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
             
-            ## STEP 1: GLOBAL LEVEL --> update s and scalar_K (using all patients)
-            # Use average f across clusters as reference for global s and scalar_K update
-            # For now, use the first cluster's parameters as reference
-            ref_f = np.ravel(cluster_f[0])  # Ensure ref_f is 1D
-            
+            ## STEP 1: GLOBAL LEVEL --> update s and scalar_K 
             current_s, current_scalar_K = fit_theta_globals(
                 X_obs=X_obs, dt_obs=dt, ids=ids, K=K,
                 t_span=self.t_span, use_jacobian=current_jac,
-                f=ref_f,
                 beta_pred=current_beta,
                 s_guess=current_s, scalar_K_guess=current_scalar_K,
                 lambda_s=0.0, lambda_scalar=self.lambda_scalar,
-                rng=rng
+                rng=rng,
+                assignments=assignments,
+                cluster_f=cluster_f
             )
             
-            ## STEP 2: RECOMPUTE CLUSTER ASSIGNMENTS (hard assignment)
-            # Assign each patient to the cluster that gives lowest reconstruction error
-            assignments = self._update_assignments(
-                X_obs, dt, ids, cog, current_beta,
-                cluster_f, current_scalar_K, current_s,
-                K, self.t_span, cluster_cog_a, cluster_cog_b,
-                self.lambda_cog
+            ## STEP 2: RECOMPUTE CLUSTER ASSIGNMENTS (hard or jittered)
+            use_jitter_this_iter = (
+                self.assignments_jitter
+                and self.jitter_iter > 0
+                and (loop_iter % self.jitter_iter == 0)
+                and loop_iter > 0
             )
+            if use_jitter_this_iter:
+                assignments, probs = self._update_assignments_jitter(
+                    X_obs, dt, ids, cog, current_beta,
+                    cluster_f, current_scalar_K, current_s,
+                    K, self.t_span, cluster_cog_a, cluster_cog_b,
+                    self.lambda_cog
+                )
+                self.assignment_probabilities_ = probs
+            else:
+                assignments = self._update_assignments(
+                    X_obs, dt, ids, cog, current_beta,
+                    cluster_f, current_scalar_K, current_s,
+                    K, self.t_span, cluster_cog_a, cluster_cog_b,
+                    self.lambda_cog
+                )
             assignment_history[:, hist_idx] = assignments
             
             ## STEP 2.5: UPDATE COGNITIVE REGRESSION PARAMS PER SUBTYPE
@@ -527,46 +553,80 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         return assignments
 
-
-    def _update_assignments_likelihood(self, X_obs, dt, ids, cog, beta, cluster_f, 
-                                   scalar_K, s, K, t_span, cluster_cog_a, cluster_cog_b, 
-                                   lambda_cog, error_scale=1.0):
-        """Probabilistic assignments assuming Gaussian error distribution."""
+    def _update_assignments_jitter(self, X_obs, dt, ids, cog, beta, cluster_f, scalar_K, s,
+                                  K, t_span, cluster_cog_a, cluster_cog_b, lambda_cog):
+        """
+        Jitter assignments for each patient form p_k = exp(-SSE_k)/sum_k exp(-SSE_k)
+        (reconstruction-only SSE per subtype), then sample one assignment from that
+        categorical. Returns assignments and the probability matrix for entropy etc.
+        """
         n_patients = len(np.unique(ids))
         n_subtypes = len(cluster_f)
+        assignments = np.zeros(n_patients, dtype=int)
         probabilities = np.zeros((n_patients, n_subtypes))
-        
         unique_ids = np.unique(ids)
-        
+
         for idx, patient_id in enumerate(unique_ids):
             mask = (ids == patient_id)
             X_obs_i = X_obs[mask, :]
             dt_i = dt[mask]
-            cog_i = cog[mask, :]
             beta_i = beta[idx]
-            
-            log_likelihoods = np.zeros(n_subtypes)
-            
+
+            sse_vec = np.zeros(n_subtypes)
             for subtype in range(n_subtypes):
                 f_cluster = np.ravel(cluster_f[subtype])
-                theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
                 X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
-                
-                error = beta_loss(
-                    beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
-                    cog_i, cluster_cog_a[subtype], cluster_cog_b[subtype], theta_cluster, lambda_cog
-                )
-                
-                # Gaussian log-likelihood: -0.5 * (error/scale)^2
-                log_likelihoods[subtype] = -0.5 * (error / error_scale) ** 2
-            
-            # Convert to probabilities (with numerical stability)
-            log_likelihoods -= np.max(log_likelihoods)
-            probabilities[idx] = np.exp(log_likelihoods)
-            probabilities[idx] /= np.sum(probabilities[idx])
+                sse_vec[subtype] = reconstruction_sse(beta_i, X_obs_i, dt_i, X_pred_cluster, t_span, s)
+
+            log_p = -sse_vec / self.jitter_temperature
+            log_p -= np.max(log_p)
+            p = np.exp(log_p)
+            p /= p.sum()
+
+            probabilities[idx, :] = p
+            assignments[idx] = self.rng.choice(n_subtypes, p=p)
+
+        return assignments, probabilities
+
+    # def _update_assignments_likelihood(self, X_obs, dt, ids, cog, beta, cluster_f, 
+    #                                scalar_K, s, K, t_span, cluster_cog_a, cluster_cog_b, 
+    #                                lambda_cog, error_scale=1.0):
+    #     """Probabilistic assignments assuming Gaussian error distribution."""
+    #     n_patients = len(np.unique(ids))
+    #     n_subtypes = len(cluster_f)
+    #     probabilities = np.zeros((n_patients, n_subtypes))
         
-            assignments = np.argmax(probabilities, axis=1)
-            return assignments, probabilities
+    #     unique_ids = np.unique(ids)
+        
+    #     for idx, patient_id in enumerate(unique_ids):
+    #         mask = (ids == patient_id)
+    #         X_obs_i = X_obs[mask, :]
+    #         dt_i = dt[mask]
+    #         cog_i = cog[mask, :]
+    #         beta_i = beta[idx]
+            
+    #         log_likelihoods = np.zeros(n_subtypes)
+            
+    #         for subtype in range(n_subtypes):
+    #             f_cluster = np.ravel(cluster_f[subtype])
+    #             theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
+    #             X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
+                
+    #             error = beta_loss(
+    #                 beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
+    #                 cog_i, cluster_cog_a[subtype], cluster_cog_b[subtype], theta_cluster, lambda_cog
+    #             )
+                
+    #             # Gaussian log-likelihood: -0.5 * (error/scale)^2
+    #             log_likelihoods[subtype] = -0.5 * (error / error_scale) ** 2
+            
+    #         # Convert to probabilities (with numerical stability)
+    #         log_likelihoods -= np.max(log_likelihoods)
+    #         probabilities[idx] = np.exp(log_likelihoods)
+    #         probabilities[idx] /= np.sum(probabilities[idx])
+        
+    #         assignments = np.argmax(probabilities, axis=1)
+    #         return assignments, probabilities
     
     def _optimize_jsd_redistribution(self, beta, assignments, t_max, iteration=None):
         """
@@ -611,7 +671,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         unique_subtypes = np.unique(assignments)
         if len(unique_subtypes) < 2:
             return beta
-
+        
         # Extract betas and indices for each subtype
         subtype_betas_list = []
         subtype_indices_list = []

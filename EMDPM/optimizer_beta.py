@@ -86,6 +86,23 @@ def _jsd_loss_and_grad(beta_i: float, beta_all: np.ndarray, assignments: np.ndar
     return jsd_loss, jsd_grad
 
 
+def reconstruction_sse(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
+                       X_pred: np.ndarray, t_span: np.ndarray, s: np.ndarray) -> float:
+    """
+    Reconstruction-only sum of squared errors for one patient and one trajectory.
+    SSE = sum over j,t of (y_pred_j(t) - y_true_j(t))^2. Used for soft/jittered
+    assignment posteriors p_k = exp(-SSE_k) / sum_k exp(-SSE_k).
+    """
+    t_pred_i = dt_i + beta_i
+    X_interp_i = np.array([
+        np.interp(t_pred_i, t_span, s[b] * X_pred[b])
+        for b in range(X_pred.shape[0])
+    ])
+    X_obs_i_T = X_obs_i.T
+    residuals = X_obs_i_T - X_interp_i
+    return float(np.sum(residuals ** 2))
+
+
 def beta_loss(beta_i: float, X_obs_i: np.ndarray, dt_i: np.ndarray,
               X_pred: np.ndarray, t_span: np.ndarray,
               cog_i: np.ndarray, cog_a: np.ndarray, cog_b: float,
