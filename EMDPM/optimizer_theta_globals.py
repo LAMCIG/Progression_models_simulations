@@ -148,12 +148,15 @@ def theta_s_loss_multi(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         x_scaled_k = s[:, None] * x_k
         x_scaled_list.append(x_scaled_k)
 
-    # Predicted value per observation using that observation's assigned subtype
+    # Predicted value per observation: vectorize by subtype (one interp per subtype per biomarker)
     x_pred = np.zeros_like(x_obs)
-    for i in range(n_obs):
-        a_i = int(observation_assignments[i])
+    for k in range(n_subtypes):
+        mask_k = (observation_assignments == k)
+        if not np.any(mask_k):
+            continue
+        t_k = t_obs[mask_k]
         for j in range(n_biomarkers):
-            x_pred[i, j] = np.interp(t_obs[i], t_span, x_scaled_list[a_i][j])
+            x_pred[mask_k, j] = np.interp(t_k, t_span, x_scaled_list[k][j])
 
     residuals = x_obs - x_pred
     loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lambda_scalar * scalar_K ** 2
@@ -184,38 +187,49 @@ def theta_s_loss_jac_multi(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndar
         x_scaled_k = s[:, None] * x_k
         x_scaled_list.append(x_scaled_k)
 
-    # Predictions and residuals
+    # Precompute CubicSplines for scalar_K gradient: one per (subtype, biomarker)
+    splines_scalar = []
+    for k in range(n_subtypes):
+        x_k = x_list[k]
+        f_k = np.ravel(cluster_f[k])
+        Kx_plus_f = (K @ x_k) + f_k[:, None]
+        scalar_expr = (1 - x_k) * Kx_plus_f
+        splines_scalar.append([
+            CubicSpline(t_span, scalar_expr[j], extrapolate=True)
+            for j in range(n_biomarkers)
+        ])
+
+    # Predictions and residuals: vectorize by subtype
     x_pred = np.zeros_like(x_obs)
-    for i in range(n_obs):
-        a_i = int(observation_assignments[i])
+    for k in range(n_subtypes):
+        mask_k = (observation_assignments == k)
+        if not np.any(mask_k):
+            continue
+        t_k = t_obs[mask_k]
         for j in range(n_biomarkers):
-            x_pred[i, j] = np.interp(t_obs[i], t_span, x_scaled_list[a_i][j])
+            x_pred[mask_k, j] = np.interp(t_k, t_span, x_scaled_list[k][j])
 
     residuals = x_obs - x_pred
     loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lambda_scalar * scalar_K ** 2
 
-    # Gradient for s: for each observation i, d/ds of x_pred[i] uses x_list[a_i] interpolated at t_obs[i]
+    # Gradient for s: vectorize by subtype (one interp per subtype per biomarker, then sum)
     grad_s = np.zeros(n_biomarkers)
-    for i in range(n_obs):
-        a_i = int(observation_assignments[i])
-        x_interp_i = np.zeros(n_biomarkers)
+    for k in range(n_subtypes):
+        mask_k = (observation_assignments == k)
+        if not np.any(mask_k):
+            continue
+        t_k = t_obs[mask_k]
+        x_interp_k = np.zeros((np.sum(mask_k), n_biomarkers))
         for j in range(n_biomarkers):
-            x_interp_i[j] = np.interp(t_obs[i], t_span, x_list[a_i][j])
-        grad_s = grad_s - 2 * residuals[i] * x_interp_i
+            x_interp_k[:, j] = np.interp(t_k, t_span, x_list[k][j])
+        grad_s = grad_s - 2 * np.sum(residuals[mask_k] * x_interp_k, axis=0)
     grad_s = grad_s + 2 * lambda_s * s
 
-    # Gradient for scalar_K: need d(x)/d(scalar_K) per subtype, then sum over observations
+    # Gradient for scalar_K: evaluate prebuilt splines per observation
     grad_scalar_K = 0.0
     for i in range(n_obs):
         a_i = int(observation_assignments[i])
-        x_k = x_list[a_i]
-        f_k = np.ravel(cluster_f[a_i])
-        Kx_plus_f = (K @ x_k) + f_k[:, None]
-        scalar_expr = (1 - x_k) * Kx_plus_f
-        scalar_obs_i = np.zeros(n_biomarkers)
-        for j in range(n_biomarkers):
-            interp_fn = CubicSpline(t_span, scalar_expr[j], extrapolate=True)
-            scalar_obs_i[j] = interp_fn(t_obs[i])
+        scalar_obs_i = np.array([splines_scalar[a_i][j](t_obs[i]) for j in range(n_biomarkers)])
         grad_scalar_K = grad_scalar_K - 2 * np.sum(residuals[i] * s * scalar_obs_i)
     grad_scalar_K = grad_scalar_K + 2 * lambda_scalar * scalar_K
 

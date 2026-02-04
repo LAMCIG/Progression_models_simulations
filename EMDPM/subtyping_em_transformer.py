@@ -517,40 +517,46 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         For each patient, compute reconstruction error with each cluster's parameters
         and assign to the cluster with lowest error.
         """
-        n_patients = len(np.unique(ids))
-        n_subtypes = len(cluster_f)
-        assignments = np.zeros(n_patients, dtype=int)
-        
         unique_ids = np.unique(ids)
-        
+        n_patients = len(unique_ids)
+        n_subtypes = len(cluster_f)
+        n_biomarkers = X_obs.shape[1]
+        assignments = np.zeros(n_patients, dtype=int)
+
+        # Precompute one trajectory per subtype (reuse across patients)
+        X_pred_by_cluster = []
+        for subtype in range(n_subtypes):
+            f_cluster = np.ravel(cluster_f[subtype])
+            X_pred_by_cluster.append(
+                solve_system(np.zeros(n_biomarkers), f_cluster, K, t_span, scalar_K)
+            )
+
         for idx, patient_id in enumerate(unique_ids):
             mask = (ids == patient_id)
             X_obs_i = X_obs[mask, :]
             dt_i = dt[mask]
             cog_i = cog[mask, :]
             beta_i = beta[idx]
-            
+
             best_error = np.inf
             best_subtype = 0
-            
-            # Try each cluster and find the one with lowest reconstruction error
+
             for subtype in range(n_subtypes):
-                f_cluster = np.ravel(cluster_f[subtype])  # Ensure 1D
+                f_cluster = np.ravel(cluster_f[subtype])
                 theta_cluster = np.concatenate([f_cluster, s, [scalar_K]])
-                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
-                
-                # Compute reconstruction error using subtype-specific cognitive params
+                X_pred_cluster = X_pred_by_cluster[subtype]
+
                 error = beta_loss(
                     beta_i, X_obs_i, dt_i, X_pred_cluster, t_span,
                     cog_i, cluster_cog_a[subtype], cluster_cog_b[subtype], theta_cluster, lambda_cog
                 )
-                
+
                 if error < best_error:
                     best_error = error
                     best_subtype = subtype
-            
+
             assignments[idx] = best_subtype
-        
+
         return assignments
 
     def _update_assignments_jitter(self, X_obs, dt, ids, cog, beta, cluster_f, scalar_K, s,
@@ -560,11 +566,20 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         (reconstruction-only SSE per subtype), then sample one assignment from that
         categorical. Returns assignments and the probability matrix for entropy etc.
         """
-        n_patients = len(np.unique(ids))
+        unique_ids = np.unique(ids)
+        n_patients = len(unique_ids)
         n_subtypes = len(cluster_f)
+        n_biomarkers = X_obs.shape[1]
         assignments = np.zeros(n_patients, dtype=int)
         probabilities = np.zeros((n_patients, n_subtypes))
-        unique_ids = np.unique(ids)
+
+        # Precompute one trajectory per subtype (reuse across patients)
+        X_pred_by_cluster = []
+        for subtype in range(n_subtypes):
+            f_cluster = np.ravel(cluster_f[subtype])
+            X_pred_by_cluster.append(
+                solve_system(np.zeros(n_biomarkers), f_cluster, K, t_span, scalar_K)
+            )
 
         for idx, patient_id in enumerate(unique_ids):
             mask = (ids == patient_id)
@@ -574,9 +589,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
 
             sse_vec = np.zeros(n_subtypes)
             for subtype in range(n_subtypes):
-                f_cluster = np.ravel(cluster_f[subtype])
-                X_pred_cluster = solve_system(np.zeros(X_obs_i.shape[1]), f_cluster, K, t_span, scalar_K)
-                sse_vec[subtype] = reconstruction_sse(beta_i, X_obs_i, dt_i, X_pred_cluster, t_span, s)
+                sse_vec[subtype] = reconstruction_sse(
+                    beta_i, X_obs_i, dt_i, X_pred_by_cluster[subtype], t_span, s
+                )
 
             log_p = -sse_vec / self.jitter_temperature
             log_p -= np.max(log_p)

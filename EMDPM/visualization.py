@@ -634,33 +634,60 @@ def plot_true_vs_predicted_subtype_trajectories(
     subtype_mapping: Optional[np.ndarray] = None,
 ) -> None:
     """
-    Overlay true vs predicted biomarker trajectories for each subtype.
-    
+    Overlay true vs predicted biomarker trajectories for each fitted subtype.
+
+    One panel per fitted subtype. When subtype_mapping is provided, each panel
+    shows the fitted trajectory vs the true trajectory of the mapped-to true subtype
+    (e.g. "Fitted 3 -> True 0" when there are more fitted than true subtypes).
+
     Parameters
     ----------
     subtype_mapping : Optional[np.ndarray]
         Optional mapping array where mapping[fitted_subtype] = true_subtype.
-        If provided, will align fitted subtypes with their corresponding true subtypes.
+        If provided, number of panels = len(f_pred_list) and each panel compares
+        fitted trajectory to the mapped true subtype.
     """
-    if len(f_true_list) < n_subtypes or len(f_pred_list) < n_subtypes:
-        raise ValueError("f_true_list and f_pred_list must contain n_subtypes elements.")
+    n_fitted = len(f_pred_list)
+    if n_fitted == 0:
+        raise ValueError("f_pred_list must not be empty.")
+    if len(scalar_K_pred_list) != n_fitted:
+        raise ValueError(
+            f"scalar_K_pred_list must have length {n_fitted} (number of fitted subtypes), got {len(scalar_K_pred_list)}."
+        )
+    if subtype_mapping is not None:
+        if len(subtype_mapping) != n_fitted:
+            raise ValueError(
+                f"subtype_mapping length must match number of fitted subtypes ({n_fitted}), got {len(subtype_mapping)}."
+            )
+        max_true_idx = int(np.max(subtype_mapping))
+        if len(f_true_list) <= max_true_idx or len(scalar_K_true_list) <= max_true_idx:
+            raise ValueError(
+                f"f_true_list and scalar_K_true_list must have at least {max_true_idx + 1} elements for subtype_mapping."
+            )
+    else:
+        if len(f_true_list) < n_subtypes or len(f_true_list) < n_fitted:
+            raise ValueError("f_true_list must have at least n_subtypes (or n_fitted) elements when subtype_mapping is None.")
+        if len(scalar_K_true_list) < n_fitted:
+            raise ValueError("scalar_K_true_list must have at least n_fitted elements when subtype_mapping is None.")
+        if n_fitted != n_subtypes:
+            raise ValueError("When subtype_mapping is None, len(f_pred_list) must equal n_subtypes.")
 
     colors = sns.color_palette("deep", n_biomarkers)
-    fig, axes = plt.subplots(n_subtypes, 1, figsize=(10, max(3 * n_subtypes, 4)), sharex=True)
-    if n_subtypes == 1:
+    fig, axes = plt.subplots(n_fitted, 1, figsize=(10, max(3 * n_fitted, 4)), sharex=True)
+    if n_fitted == 1:
         axes = [axes]
 
-    for subtype in range(n_subtypes):
+    for subtype in range(n_fitted):
         ax = axes[subtype]
         # Map to true subtype if mapping provided
         if subtype_mapping is not None:
-            true_subtype_idx = subtype_mapping[subtype]
+            true_subtype_idx = int(subtype_mapping[subtype])
             f_true = np.asarray(f_true_list[true_subtype_idx])
             scalar_true = float(scalar_K_true_list[true_subtype_idx])
         else:
             f_true = np.asarray(f_true_list[subtype])
             scalar_true = float(scalar_K_true_list[subtype])
-        
+
         f_pred = np.asarray(f_pred_list[subtype])
         scalar_pred = float(scalar_K_pred_list[subtype])
 
@@ -674,9 +701,8 @@ def plot_true_vs_predicted_subtype_trajectories(
             ax.plot(t_span, traj_true[biom_idx], color=color, linestyle="-", alpha=0.8, label=label_true)
             ax.plot(t_span, traj_pred[biom_idx], color=color, linestyle="--", alpha=0.8, label=label_pred)
 
-        # Update title if mapping provided
         if subtype_mapping is not None:
-            true_subtype_idx = subtype_mapping[subtype]
+            true_subtype_idx = int(subtype_mapping[subtype])
             ax.set_title(f"Fitted {subtype} -> True {true_subtype_idx}: trajectories")
         else:
             ax.set_title(f"Subtype {subtype}: true vs predicted trajectories")

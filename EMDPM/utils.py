@@ -142,46 +142,52 @@ def get_subtype_mapping_from_f(
 ) -> np.ndarray:
     """
     Create a mapping from fitted subtype indices to true subtype indices based on f parameters.
-    
-    Uses Hungarian algorithm to find the best match between fitted and true subtypes
-    based on Euclidean distance between f vectors. Returns an array where index = fitted subtype, 
-    value = corresponding true subtype.
-    
+
+    Supports unequal counts: multiple fitted subtypes can map to the same true subtype
+    (when n_fitted > n_true), or some true subtypes have no fitted counterpart (when n_fitted < n_true).
+    Uses Hungarian algorithm on (n_fitted x n_true) cost matrix; any extra fitted subtypes
+    are assigned to their closest true subtype.
+
     Parameters
     ----------
     fitted_f_list : Sequence[np.ndarray]
         List of fitted f arrays, one per subtype. Each should be shape (n_biomarkers,).
     true_f_list : Sequence[np.ndarray]
         List of true f arrays, one per subtype. Each should be shape (n_biomarkers,).
-    
+
     Returns
     -------
     np.ndarray
-        Mapping array where mapping[fitted_subtype] = true_subtype
-        Shape: (n_subtypes,)
+        Mapping array where mapping[fitted_subtype] = true_subtype (in 0..n_true-1).
+        Shape: (n_fitted,). All values are valid indices into true_f_list.
     """
     fitted_f_list = [np.asarray(f) for f in fitted_f_list]
     true_f_list = [np.asarray(f) for f in true_f_list]
-    
+
     n_fitted = len(fitted_f_list)
     n_true = len(true_f_list)
-    n_subtypes = max(n_fitted, n_true)
-    
-    # Build cost matrix: cost[i, j] = Euclidean distance between fitted_f[i] and true_f[j]
-    cost_matrix = np.zeros((n_subtypes, n_subtypes))
+    if n_true == 0:
+        return np.array([], dtype=int)
+
+    # Cost matrix: (n_fitted, n_true) — cost[i, j] = distance(fitted_i, true_j)
+    cost_matrix = np.zeros((n_fitted, n_true))
     for i in range(n_fitted):
         for j in range(n_true):
-            # Compute Euclidean distance between f vectors
             cost_matrix[i, j] = np.linalg.norm(fitted_f_list[i] - true_f_list[j])
-    
-    # Use Hungarian algorithm to find optimal assignment (minimize total distance)
+
+    # Optimal assignment: assigns min(n_fitted, n_true) pairs
     row_ind, col_ind = linear_sum_assignment(cost_matrix)
-    
-    # Create mapping: mapping[fitted_subtype] = true_subtype
-    mapping = np.zeros(n_subtypes, dtype=int)
+
+    # mapping[fitted_subtype] = true_subtype; length n_fitted, values in 0..n_true-1
+    mapping = np.zeros(n_fitted, dtype=int)
     for fitted_idx, true_idx in zip(row_ind, col_ind):
         mapping[fitted_idx] = true_idx
-    
+    # When n_fitted > n_true, some fitted indices are unassigned; assign to closest true
+    assigned_rows = set(row_ind)
+    for i in range(n_fitted):
+        if i not in assigned_rows:
+            mapping[i] = int(np.argmin(cost_matrix[i]))
+
     return mapping
 
 
@@ -324,21 +330,23 @@ def print_parameter_comparison(
     n_subtypes : int, optional
         Number of subtypes. If None, inferred from fitted_f_list.
     """
-    if n_subtypes is None:
-        n_subtypes = len(fitted_f_list)
-    
+    n_fitted = len(fitted_f_list)
+    n_true = len(true_f_list)
     if subtype_mapping is None:
-        subtype_mapping = np.arange(n_subtypes)
-    
-    
-    # Compare f by subtype
-    for fitted_subtype in range(n_subtypes):
-        true_subtype = subtype_mapping[fitted_subtype]
+        subtype_mapping = np.arange(min(n_fitted, n_true))
+
+    # Compare f by fitted subtype (handles n_fitted != n_true)
+    for fitted_subtype in range(n_fitted):
+        if fitted_subtype >= len(subtype_mapping):
+            break
+        true_subtype = int(subtype_mapping[fitted_subtype])
+        if true_subtype < 0 or true_subtype >= n_true:
+            print(f"\nFitted Subtype {fitted_subtype} -> (no true match)")
+            print(f"  f_fitted:      {np.asarray(fitted_f_list[fitted_subtype])}")
+            continue
         f_fitted = np.asarray(fitted_f_list[fitted_subtype])
         f_true = np.asarray(true_f_list[true_subtype])
-        
         f_error = np.mean(np.abs(f_fitted - f_true))
-        
         print(f"\nFitted Subtype {fitted_subtype} -> True Subtype {true_subtype}:")
         print(f"  f_fitted:      {f_fitted}")
         print(f"  f_true:        {f_true}")
