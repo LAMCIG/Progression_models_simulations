@@ -123,6 +123,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 f"ids={ids.shape}, cog={cog.shape}"
             )
 
+        # Total number of scalar observations (for BIC)
+        self.n_obs_ = X_obs.shape[0] * X_obs.shape[1]
+
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
 
         if initial_beta_list:
@@ -506,6 +509,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         f = np.ravel(cluster_f[0])  # Ensure 1D
         scalar_K = current_scalar_K  # Global scalar_K
         self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
+
+        # BIC on training data (lower is better)
+        self.bic_ = self.bic(X=None)
         
         return self
     
@@ -906,6 +912,46 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
 
             lse += np.sum((X_obs_i - X_interp) ** 2)
         return lse
+
+    def _bic_n_params(self) -> int:
+        """
+        Number of free parameters for BIC (population parameters only; no subject-level beta).
+        Requires fit() to have been called.
+        """
+        if not hasattr(self, "final_s") or not hasattr(self, "cluster_cog_a"):
+            raise RuntimeError("fit() must be called before _bic_n_params()")
+
+        n_biomarkers = self.final_s.shape[0]
+        n_subtypes = self.n_subtypes
+
+        # cluster_cog_a is a list of per-subtype arrays; infer n_cog_features from first subtype
+        if not isinstance(self.cluster_cog_a, (list, tuple)) or len(self.cluster_cog_a) == 0:
+            raise RuntimeError("cluster_cog_a is empty or invalid; fit() may have failed")
+
+        first_cog_a = np.asarray(self.cluster_cog_a[0])
+        n_cog_features = first_cog_a.shape[0]
+
+        # Global: s (n_biomarkers), scalar_K (1)
+        # Per subtype: f (n_biomarkers), cog_a (n_cog_features), cog_b (1)
+        k = (n_biomarkers + 1) + n_subtypes * (n_biomarkers + n_cog_features + 1)
+        return k
+
+    def bic(self, X: list = None) -> float:
+        """
+        Bayesian Information Criterion on training data (lower is better).
+        Uses Gaussian residual likelihood with MLE variance; n = total scalar observations.
+        Call after fit(); uses stored n_obs_ and lse_final from the last fit.
+        """
+        if not hasattr(self, "n_obs_") or not hasattr(self, "lse_final"):
+            raise RuntimeError("fit() must be called before bic()")
+        N_obs = self.n_obs_
+        LSE = self.lse_final
+        sigma2 = max(LSE / N_obs, 1e-12)
+        k = self._bic_n_params()
+        # -2*ln(L) = N_obs * (1 + ln(2*pi) + ln(sigma2))
+        neg2_log_L = N_obs * (1.0 + np.log(2.0 * np.pi) + np.log(sigma2))
+        BIC = neg2_log_L + k * np.log(N_obs)
+        return float(BIC)
     
 
 def fit_subtyping_em_with_assignments(

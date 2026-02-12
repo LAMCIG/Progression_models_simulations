@@ -1,0 +1,41 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup (two-level: K by BIC, hyperparams by CV) ===
+n_subtypes candidates: [1, 2, 3, 4]
+Hyperparameter combinations per K: 360
+Total combinations: 1440
+Current candidate: 215
+
+=== Parameters for Candidate 215 (K=1, hyper idx=215) ===
+  lambda_f: 1.0
+  lambda_cog: 0.25
+  lambda_scalar: 0.1
+  lambda_jsd: 10000
+  lambda_beta: 0.0
+  n_subtypes: 1
+  0%|          | 0/100 [00:00<?, ?it/s]  1%|1         | 1/100 [00:34<57:16, 34.71s/it]  2%|2         | 2/100 [00:47<35:09, 21.53s/it]  3%|3         | 3/100 [00:58<27:42, 17.14s/it]  4%|4         | 4/100 [01:11<24:29, 15.31s/it]  5%|5         | 5/100 [03:29<1:34:07, 59.45s/it]  6%|6         | 6/100 [03:40<1:07:39, 43.19s/it]  7%|7         | 7/100 [04:06<58:03, 37.45s/it]    8%|8         | 8/100 [04:38<54:41, 35.67s/it]  9%|9         | 9/100 [06:16<1:23:41, 55.18s/it] 10%|#         | 10/100 [06:32<1:04:36, 43.07s/it] 11%|#1        | 11/100 [07:28<1:10:01, 47.21s/it] 12%|#2        | 12/100 [07:49<57:20, 39.10s/it]   13%|#3        | 13/100 [08:45<1:04:14, 44.31s/it] 14%|#4        | 14/100 [09:12<55:48, 38.94s/it]   15%|#5        | 15/100 [09:57<57:57, 40.91s/it] 16%|#6        | 16/100 [10:20<49:32, 35.39s/it] 16%|#6        | 16/100 [10:59<57:43, 41.23s/it]
+Estimating beta and subtype assignments:   0%|          | 0/39 [00:00<?, ?it/s]Estimating beta and subtype assignments:   3%|2         | 1/39 [00:00<00:03,  9.58it/s]Estimating beta and subtype assignments:   8%|7         | 3/39 [00:00<00:02, 13.95it/s]Estimating beta and subtype assignments:  13%|#2        | 5/39 [00:00<00:02, 15.09it/s]Estimating beta and subtype assignments:  21%|##        | 8/39 [00:00<00:01, 17.50it/s]Estimating beta and subtype assignments:  26%|##5       | 10/39 [00:00<00:01, 16.72it/s]Estimating beta and subtype assignments:  31%|###       | 12/39 [00:00<00:01, 16.16it/s]Estimating beta and subtype assignments:  36%|###5      | 14/39 [00:00<00:01, 17.14it/s]Estimating beta and subtype assignments:  41%|####1     | 16/39 [00:00<00:01, 17.75it/s]Estimating beta and subtype assignments:  49%|####8     | 19/39 [00:01<00:01, 18.83it/s]Estimating beta and subtype assignments:  54%|#####3    | 21/39 [00:01<00:00, 18.46it/s]Estimating beta and subtype assignments:  62%|######1   | 24/39 [00:01<00:00, 18.43it/s]Estimating beta and subtype assignments:  67%|######6   | 26/39 [00:01<00:00, 17.88it/s]Estimating beta and subtype assignments:  72%|#######1  | 28/39 [00:01<00:00, 16.65it/s]Estimating beta and subtype assignments:  79%|#######9  | 31/39 [00:01<00:00, 18.56it/s]Estimating beta and subtype assignments:  85%|########4 | 33/39 [00:01<00:00, 17.47it/s]Estimating beta and subtype assignments:  90%|########9 | 35/39 [00:02<00:00, 17.81it/s]Estimating beta and subtype assignments:  95%|#########4| 37/39 [00:02<00:00, 17.63it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:02<00:00, 16.74it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:02<00:00, 17.19it/s]
+  Fold 1/3 val LSE: 204.197138
+  0%|          | 0/100 [00:00<?, ?it/s]  1%|1         | 1/100 [00:26<43:13, 26.20s/it]  2%|2         | 2/100 [00:55<45:49, 28.06s/it]  3%|3         | 3/100 [01:38<56:34, 35.00s/it]  4%|4         | 4/100 [01:46<38:39, 24.17s/it]  5%|5         | 5/100 [04:08<1:45:20, 66.53s/it]  6%|6         | 6/100 [04:30<1:20:39, 51.49s/it]  7%|7         | 7/100 [06:17<1:48:02, 69.70s/it]  8%|8         | 8/100 [06:27<1:17:50, 50.77s/it]  9%|9         | 9/100 [08:34<1:53:02, 74.53s/it] 10%|#         | 10/100 [08:51<1:25:06, 56.74s/it] 11%|#1        | 11/100 [10:13<1:35:47, 64.57s/it] 12%|#2        | 12/100 [10:26<1:11:38, 48.85s/it] 13%|#3        | 13/100 [10:38<54:32, 37.61s/it]   14%|#4        | 14/100 [11:28<59:10, 41.28s/it] 15%|#5        | 15/100 [11:39<45:53, 32.39s/it] 15%|#5        | 15/100 [13:56<1:19:00, 55.77s/it]
+Estimating beta and subtype assignments:   0%|          | 0/39 [00:00<?, ?it/s]Estimating beta and subtype assignments:   8%|7         | 3/39 [00:00<00:01, 21.53it/s]Estimating beta and subtype assignments:  15%|#5        | 6/39 [00:00<00:01, 19.62it/s]Estimating beta and subtype assignments:  21%|##        | 8/39 [00:00<00:01, 18.72it/s]Estimating beta and subtype assignments:  28%|##8       | 11/39 [00:00<00:01, 18.81it/s]Estimating beta and subtype assignments:  33%|###3      | 13/39 [00:00<00:01, 18.47it/s]Estimating beta and subtype assignments:  38%|###8      | 15/39 [00:00<00:01, 18.25it/s]Estimating beta and subtype assignments:  44%|####3     | 17/39 [00:00<00:01, 18.25it/s]Estimating beta and subtype assignments:  49%|####8     | 19/39 [00:01<00:01, 16.95it/s]Estimating beta and subtype assignments:  56%|#####6    | 22/39 [00:01<00:00, 18.83it/s]Estimating beta and subtype assignments:  62%|######1   | 24/39 [00:01<00:00, 18.72it/s]Estimating beta and subtype assignments:  67%|######6   | 26/39 [00:01<00:00, 15.45it/s]Estimating beta and subtype assignments:  72%|#######1  | 28/39 [00:01<00:00, 12.31it/s]Estimating beta and subtype assignments:  77%|#######6  | 30/39 [00:01<00:00, 13.36it/s]Estimating beta and subtype assignments:  82%|########2 | 32/39 [00:02<00:00, 11.70it/s]Estimating beta and subtype assignments:  87%|########7 | 34/39 [00:02<00:00, 12.54it/s]Estimating beta and subtype assignments:  92%|#########2| 36/39 [00:02<00:00, 13.98it/s]Estimating beta and subtype assignments:  97%|#########7| 38/39 [00:02<00:00, 15.03it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:02<00:00, 15.89it/s]
+  Fold 2/3 val LSE: 219.078449
+  0%|          | 0/100 [00:00<?, ?it/s]  1%|1         | 1/100 [00:43<1:12:05, 43.69s/it]  2%|2         | 2/100 [00:53<38:40, 23.67s/it]    3%|3         | 3/100 [01:04<28:43, 17.77s/it]  4%|4         | 4/100 [01:13<23:12, 14.51s/it]
