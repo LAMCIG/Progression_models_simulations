@@ -39,6 +39,7 @@ class EM(BaseEstimator, TransformerMixin):
                  
                  # [misc options]
                  verbose = 1,
+                 use_cog: bool = True,
                  ):
 
         # [model settings]
@@ -67,6 +68,8 @@ class EM(BaseEstimator, TransformerMixin):
         
         # [misc options]
         self.verbose = verbose
+        # whether to use cognitive / clinical scores in the beta prior by default
+        self.use_cog = use_cog
         
     def fit(self, X: np.ndarray, y: np.ndarray = None):
         # 2025.6.22 - will temporarily assign class vars to regular vars, TODO: refactor class vars
@@ -326,15 +329,47 @@ class EM(BaseEstimator, TransformerMixin):
         
         return self
     
-    def transform(self, X: list[dict]) -> np.ndarray:
+    def transform(self, X: list[dict], use_cog: bool | None = None) -> np.ndarray:
         """
         Estimate beta values for a list of patient dicts.
+        
+        Parameters
+        ----------
+        X : list[dict]
+            List of patient dictionaries, each with at least
+            "X_obs" and "dt". If cognitive / clinical scores
+            are available they should be under "cog".
+        use_cog : bool or None, optional
+            If False, ignore cognitive scores even if present and
+            do not apply the cognitive prior (lambda_cog = 0 for
+            this call). If None, fall back to self.use_cog.
         """
+        # decide whether to use cognitive scores for this call
+        if use_cog is None:
+            use_cog_flag = self.use_cog
+        else:
+            use_cog_flag = use_cog
+
         beta_vals = []
         for p in tqdm(X, desc="Estimating beta values"):
-            cog_i = p["cog"]
-            if cog_i.ndim == 1:
-                cog_i = cog_i.reshape(-1, 1)
+            # Handle cognitive scores optionally
+            if use_cog_flag and ("cog" in p) and (p["cog"] is not None):
+                cog_i = p["cog"]
+                if cog_i.ndim == 1:
+                    cog_i = cog_i.reshape(-1, 1)
+                lambda_cog = self.lambda_cog
+                cog_a = self.cog_a
+                cog_b = self.cog_b
+            else:
+                # No cognitive information: create a dummy feature column
+                # and turn off the cognitive prior for this transform call.
+                n_obs_i = p["X_obs"].shape[0]
+                cog_i = np.zeros((n_obs_i, 1), dtype=float)
+                lambda_cog = 0.0
+                # cog_a / cog_b still need to be compatible with shapes, but
+                # they are effectively ignored when lambda_cog == 0.
+                cog_a = np.zeros(cog_i.shape[1], dtype=float)
+                cog_b = 0.0
 
             beta_i = estimate_beta_for_patient(
                 beta_i=0.0,
@@ -343,11 +378,11 @@ class EM(BaseEstimator, TransformerMixin):
                 X_pred=self.X_pred,
                 t_span=self.t_span,
                 cog_i=cog_i,
-                cog_a=self.cog_a,
-                cog_b=self.cog_b,
+                cog_a=cog_a,
+                cog_b=cog_b,
                 theta=self.theta,
                 K=self.K,
-                lambda_cog=self.lambda_cog,
+                lambda_cog=lambda_cog,
                 use_jacobian=self.jac_toggle,
                 t_max=self.t_max
             )

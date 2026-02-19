@@ -946,10 +946,15 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             raise RuntimeError("fit() must be called before bic()")
         N_obs = self.n_obs_
         LSE = self.lse_final
+        normalized_sse = self.normalized_
+
+## SAVE THE VARIANCE IN THE TRAINING DATA of the fold
+
         sigma2 = max(LSE / N_obs, 1e-12)
         k = self._bic_n_params()
         # -2*ln(L) = N_obs * (1 + ln(2*pi) + ln(sigma2))
-        neg2_log_L = N_obs * (1.0 + np.log(2.0 * np.pi) + np.log(sigma2))
+        #neg2_log_L = N_obs * (1.0 + np.log(2.0 * np.pi) + np.log(sigma2))
+        neg2_log_L = N_obs * (1.0 + np.log(2.0 * np.pi) +(sigma2/2.0))
         BIC = neg2_log_L + k * np.log(N_obs)
         return float(BIC)
     

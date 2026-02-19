@@ -21,7 +21,7 @@ def fit_linear_cog_regression_multi(cog: np.ndarray, dt: np.ndarray,
     
     XtX = X.T @ X
     XtY = X.T @ t_pred
-    new_cog = np.linalg.inv(XtX) @ XtY
+    new_cog = np.linalg.pinv(XtX) @ XtY
 
     a = new_cog[:-1]
     b = new_cog[-1]

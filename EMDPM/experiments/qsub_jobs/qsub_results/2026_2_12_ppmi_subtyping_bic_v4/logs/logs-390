@@ -1,0 +1,56 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup (two-level: K by BIC, hyperparams by CV) ===
+n_subtypes candidates: [2, 3, 4]
+Hyperparameter combinations per K: 135
+Total combinations: 405
+Current candidate: 390
+
+=== Parameters for Candidate 390 (K=4, hyper idx=120) ===
+  lambda_f: 1.0
+  lambda_cog: 0.1
+  lambda_scalar: 0.6
+  lambda_jsd: 0
+  lambda_beta: 0.0
+  n_subtypes: 4
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [00:43<2:25:29, 43.87s/it]  1%|1         | 2/200 [01:14<1:59:59, 36.36s/it]  2%|1         | 3/200 [01:46<1:51:50, 34.06s/it]  2%|2         | 4/200 [02:10<1:38:54, 30.28s/it]  2%|2         | 4/200 [10:55<8:55:22, 163.89s/it]
+Estimating beta and subtype assignments:   0%|          | 0/39 [00:00<?, ?it/s]Estimating beta and subtype assignments:   5%|5         | 2/39 [00:00<00:03, 10.99it/s]Estimating beta and subtype assignments:  10%|#         | 4/39 [00:00<00:03, 10.47it/s]Estimating beta and subtype assignments:  15%|#5        | 6/39 [00:00<00:03, 10.61it/s]Estimating beta and subtype assignments:  21%|##        | 8/39 [00:00<00:02, 10.87it/s]Estimating beta and subtype assignments:  26%|##5       | 10/39 [00:00<00:02, 11.35it/s]Estimating beta and subtype assignments:  31%|###       | 12/39 [00:01<00:02, 10.97it/s]Estimating beta and subtype assignments:  36%|###5      | 14/39 [00:01<00:02, 11.33it/s]Estimating beta and subtype assignments:  41%|####1     | 16/39 [00:01<00:02, 11.32it/s]Estimating beta and subtype assignments:  46%|####6     | 18/39 [00:01<00:01, 10.88it/s]Estimating beta and subtype assignments:  51%|#####1    | 20/39 [00:01<00:01, 10.95it/s]Estimating beta and subtype assignments:  56%|#####6    | 22/39 [00:02<00:01, 10.74it/s]Estimating beta and subtype assignments:  62%|######1   | 24/39 [00:02<00:01, 10.79it/s]Estimating beta and subtype assignments:  67%|######6   | 26/39 [00:02<00:01, 10.59it/s]Estimating beta and subtype assignments:  72%|#######1  | 28/39 [00:02<00:01, 10.49it/s]Estimating beta and subtype assignments:  77%|#######6  | 30/39 [00:02<00:00, 10.73it/s]Estimating beta and subtype assignments:  82%|########2 | 32/39 [00:02<00:00, 10.78it/s]Estimating beta and subtype assignments:  87%|########7 | 34/39 [00:03<00:00, 10.92it/s]Estimating beta and subtype assignments:  92%|#########2| 36/39 [00:03<00:00, 10.93it/s]Estimating beta and subtype assignments:  97%|#########7| 38/39 [00:03<00:00, 11.04it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:03<00:00, 10.88it/s]
+  Fold 1/3 val LSE: 208.622315
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [00:47<2:37:14, 47.41s/it]  1%|1         | 2/200 [01:18<2:04:10, 37.63s/it]  2%|1         | 3/200 [01:44<1:46:01, 32.29s/it]  2%|2         | 4/200 [02:12<1:40:11, 30.67s/it]  2%|2         | 5/200 [02:38<1:33:59, 28.92s/it]  3%|3         | 6/200 [03:06<1:32:26, 28.59s/it]  4%|3         | 7/200 [03:44<1:42:47, 31.96s/it]  4%|3         | 7/200 [13:01<5:59:14, 111.68s/it]
+Estimating beta and subtype assignments:   0%|          | 0/39 [00:00<?, ?it/s]Estimating beta and subtype assignments:   3%|2         | 1/39 [00:00<00:04,  7.76it/s]Estimating beta and subtype assignments:   8%|7         | 3/39 [00:00<00:03, 11.25it/s]Estimating beta and subtype assignments:  13%|#2        | 5/39 [00:00<00:03, 11.33it/s]Estimating beta and subtype assignments:  18%|#7        | 7/39 [00:00<00:03, 10.66it/s]Estimating beta and subtype assignments:  23%|##3       | 9/39 [00:00<00:02, 10.87it/s]Estimating beta and subtype assignments:  28%|##8       | 11/39 [00:00<00:02, 11.55it/s]Estimating beta and subtype assignments:  33%|###3      | 13/39 [00:01<00:02, 10.90it/s]Estimating beta and subtype assignments:  38%|###8      | 15/39 [00:01<00:02,  8.35it/s]Estimating beta and subtype assignments:  41%|####1     | 16/39 [00:01<00:03,  7.37it/s]Estimating beta and subtype assignments:  44%|####3     | 17/39 [00:01<00:03,  6.83it/s]Estimating beta and subtype assignments:  46%|####6     | 18/39 [00:02<00:03,  6.57it/s]Estimating beta and subtype assignments:  49%|####8     | 19/39 [00:02<00:02,  7.16it/s]Estimating beta and subtype assignments:  51%|#####1    | 20/39 [00:02<00:02,  7.04it/s]Estimating beta and subtype assignments:  54%|#####3    | 21/39 [00:02<00:02,  6.80it/s]Estimating beta and subtype assignments:  59%|#####8    | 23/39 [00:02<00:02,  7.32it/s]Estimating beta and subtype assignments:  62%|######1   | 24/39 [00:02<00:02,  7.42it/s]Estimating beta and subtype assignments:  64%|######4   | 25/39 [00:03<00:01,  7.08it/s]Estimating beta and subtype assignments:  67%|######6   | 26/39 [00:03<00:01,  7.10it/s]Estimating beta and subtype assignments:  69%|######9   | 27/39 [00:03<00:01,  7.29it/s]Estimating beta and subtype assignments:  72%|#######1  | 28/39 [00:03<00:01,  6.94it/s]Estimating beta and subtype assignments:  77%|#######6  | 30/39 [00:03<00:01,  7.65it/s]Estimating beta and subtype assignments:  79%|#######9  | 31/39 [00:03<00:01,  7.50it/s]Estimating beta and subtype assignments:  82%|########2 | 32/39 [00:04<00:01,  6.57it/s]Estimating beta and subtype assignments:  87%|########7 | 34/39 [00:04<00:00,  8.38it/s]Estimating beta and subtype assignments:  90%|########9 | 35/39 [00:04<00:00,  8.33it/s]Estimating beta and subtype assignments:  92%|#########2| 36/39 [00:04<00:00,  7.20it/s]Estimating beta and subtype assignments:  97%|#########7| 38/39 [00:04<00:00,  7.96it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:04<00:00,  8.07it/s]
+  Fold 2/3 val LSE: 220.302117
+  0%|          | 0/200 [00:00<?, ?it/s]Traceback (most recent call last):
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/2026_2_12_ppmi_subtyping_bic_v4/run_ppmi_subtyping_gridsearch.py", line 203, in <module>
+    em_fold.fit(X_train_fold)
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/subtyping_em_transformer.py", line 334, in fit
+    cluster_cog_a[subtype], cluster_cog_b[subtype] = fit_linear_cog_regression_multi(
+                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/optimizer_cognitive_regression.py", line 24, in fit_linear_cog_regression_multi
+    new_cog = np.linalg.inv(XtX) @ XtY
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/numpy/linalg/linalg.py", line 561, in inv
+    ainv = _umath_linalg.inv(a, signature=signature, extobj=extobj)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/numpy/linalg/linalg.py", line 112, in _raise_linalgerror_singular
+    raise LinAlgError("Singular matrix")
+numpy.linalg.LinAlgError: Singular matrix
+  0%|          | 0/200 [00:21<?, ?it/s]
