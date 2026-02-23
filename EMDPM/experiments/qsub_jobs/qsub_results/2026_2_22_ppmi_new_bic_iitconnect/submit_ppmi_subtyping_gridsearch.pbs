@@ -1,0 +1,22 @@
+#!/bin/bash
+#PBS -N ppmi_subtyping_bic
+# One lightweight Python process per array task; let the scheduler spread them across nodes.
+# Each task fits models serially (no internal multi-threading), so 1 core is enough.
+#PBS -l nodes=1:ppn=1
+#PBS -l walltime=24:00:00
+#PBS -l mem=8gb
+#PBS -j oe
+#PBS -o /home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/2026_2_22_ppmi_new_bic_iitconnect/logs
+#PBS -m abe
+# Two-level grid: 3 K (n_subtypes) × 81 hyper combos = 243 jobs (0-242)
+# Use up to 100 concurrent tasks to spread load across 10×28-core nodes without oversubscribing.
+# Increase or decrease the % value based on your queue policies.
+#PBS -t 0-404%100
+
+cd $PBS_O_WORKDIR
+source ~/miniconda3/etc/profile.d/conda.sh
+conda activate base
+EXP_DIR="/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/2026_2_22_ppmi_new_bic_iitconnect"
+mkdir -p "$EXP_DIR/logs"
+mkdir -p "$EXP_DIR/results"
+python "$EXP_DIR/run_ppmi_subtyping_gridsearch.py" --candidate $PBS_ARRAYID

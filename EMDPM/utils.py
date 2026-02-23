@@ -79,26 +79,74 @@ def initialize_beta(ids: np.ndarray, beta_range: tuple = (0, 12), rng: np.random
     
     return initial_beta
 
-def initialize_f_eigen(K: np.ndarray, jitter_strength: float = 0.05, n_eigs: int = 1, rng: np.random.RandomState = np.random.RandomState(75)) -> np.ndarray:
+def initialize_f_eigen(
+    K: np.ndarray,
+    n_subtypes: int = 1,
+    n_eigs: int = 8,
+    jitter_strength: float = 0.05,
+    jitter: bool = True,
+    sparsity_mask: bool = False,
+    sparsity_top_frac: float = 0.33,
+    sparsity_zero_frac: float = 0.5,
+    rng=None,
+) -> np.ndarray:
     """
-    Initialize forcing term f using top eigenvectors of the connectivity matrix.
+    Initialize forcing term f for each subtype using top eigenvectors of K.
+
+    Weighting: subtype j weights eigenvector j most (with 0.25 on adjacent).
+    Order: weighted sum -> normalize -> jitter -> optional sparsity mask.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (n_subtypes, n_biomarkers). Use initial_f[k] for subtype k.
     """
-    w, V = np.linalg.eigh(K)  # returns (eigenvalues, eigenvectors)
-    order = np.argsort(np.abs(w))[::-1]   # sort by eigenvalue, descending?
+    if rng is None:
+        rng = np.random.default_rng(75)
+    w, V = np.linalg.eigh(K)
+    order = np.argsort(np.abs(w))[::-1]
     V = V[:, order]
+    n_biomarkers = V.shape[0]
+    n_eigs = min(n_eigs, V.shape[1])
 
-    # Take top n_eigs
     f_list = []
-    for i in range(min(n_eigs, V.shape[1])):
-        f = np.abs(V[:, i])
-        # f /= f.mean()        # scale so mean ~1
-        # f *= 0.05           
-        if rng is not None:
-            f += rng.normal(0, jitter_strength, size=f.shape)  # apply jitter
-            f = np.clip(f, 0.0, None)
-        f_list.append(f)
+    for j in range(n_subtypes):
+        # Subtype j: weight eigenvector (j % n_eigs) most, adjacent less
+        weights = np.zeros(n_eigs)
+        idx_dom = j % n_eigs
+        weights[idx_dom] = 1.0
+        if idx_dom > 0:
+            weights[idx_dom - 1] = 0.25
+        if idx_dom < n_eigs - 1:
+            weights[idx_dom + 1] = 0.25
 
-    return np.vstack(f_list)
+        f_j = np.zeros(n_biomarkers)
+        for i in range(n_eigs):
+            f_j += weights[i] * np.abs(V[:, i])
+
+        # Normalize
+        nrm = np.linalg.norm(f_j)
+        if nrm > 1e-12:
+            f_j = f_j / nrm
+
+        # Jitter (different per subtype via rng)
+        if jitter:
+            f_j = f_j + rng.normal(0, jitter_strength, size=f_j.shape)
+            f_j = np.clip(f_j, 0.0, None)
+
+        # Optional sparsity: preserve top 33%, zero out 50% of the rest
+        if sparsity_mask:
+            n_top = max(1, int(n_biomarkers * sparsity_top_frac))
+            idx_sorted = np.argsort(f_j)[::-1]
+            mask_keep = np.zeros(n_biomarkers, dtype=bool)
+            mask_keep[idx_sorted[:n_top]] = True
+            remaining = np.where(~mask_keep)[0]
+            n_zero = int(len(remaining) * sparsity_zero_frac)
+            zero_idx = rng.choice(remaining, size=min(n_zero, len(remaining)), replace=False)
+            f_j[zero_idx] = 0.0
+
+        f_list.append(f_j)
+    return np.array(f_list)
 
 def set_diagonal_K(K: np.ndarray, s: float = 1.0, k: float = 0.05): # TODO: ask BG if K should be zeroed beforehand?
     """

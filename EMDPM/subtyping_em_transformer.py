@@ -125,6 +125,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
 
         # Total number of scalar observations (for BIC)
         self.n_obs_ = X_obs.shape[0] * X_obs.shape[1]
+        # Null/reference variance per biomarker for BIC (overall variance on training data; avoids SSE canceling)
+        self._var_per_biomarker_null = np.var(X_obs, axis=0, ddof=1)
+        self._var_per_biomarker_null = np.maximum(self._var_per_biomarker_null, 1e-12)
 
         # print(X_obs.shape, dt.shape, cog.shape, ids.shape)
 
@@ -164,9 +167,11 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         
         # forcing term, random initialization if None
         if self.initial_f is not None:
-            initial_f = self.initial_f
-            # Ensure initial_f is 1D (flatten if 2D)
-            initial_f = np.ravel(initial_f)
+            init_f = np.asarray(self.initial_f)
+            if init_f.ndim == 2 and init_f.shape[0] == self.n_subtypes:
+                initial_f = np.ravel(init_f[0])  # use first for bootstrap
+            else:
+                initial_f = np.ravel(init_f)
         else:
             initial_f = rng.uniform(0, 0.1, size=n_biomarkers)
             
@@ -231,9 +236,12 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         cluster_cog_b = []
         for subtype in range(self.n_subtypes):
             if self.initial_f is not None:
-                # Ensure initial_f is 1D before using it
-                initial_f_flat = np.ravel(self.initial_f)
-                cluster_f.append(initial_f_flat.copy() + rng.uniform(-0.01, 0.01, size=n_biomarkers))
+                init_f = np.asarray(self.initial_f)
+                if init_f.ndim == 2 and init_f.shape[0] == self.n_subtypes:
+                    cluster_f.append(np.ravel(init_f[subtype]).copy())
+                else:
+                    initial_f_flat = np.ravel(init_f)
+                    cluster_f.append(initial_f_flat.copy() + rng.uniform(-0.01, 0.01, size=n_biomarkers))
             else:
                 cluster_f.append(rng.uniform(0, 0.1, size=n_biomarkers))
             cluster_cog_a.append(initial_cog_a.copy())
@@ -510,9 +518,15 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         scalar_K = current_scalar_K  # Global scalar_K
         self.X_pred = solve_system(np.zeros(n_biomarkers), f, self.K, self.t_span, scalar_K)
 
+        # Per-biomarker SSE for BIC (training residuals)
+        self._n_obs_rows = X_obs.shape[0]
+        self._sse_per_biomarker = self._compute_sse_per_biomarker(
+            X_obs, dt, ids, current_beta, assignments,
+            cluster_f, current_s, current_scalar_K
+        )
         # BIC on training data (lower is better)
         self.bic_ = self.bic(X=None)
-        
+
         return self
     
     def _update_assignments(self, X_obs, dt, ids, cog, beta, cluster_f, scalar_K, s,
@@ -913,51 +927,105 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             lse += np.sum((X_obs_i - X_interp) ** 2)
         return lse
 
+    def _compute_sse_per_biomarker(
+        self,
+        X_obs: np.ndarray,
+        dt: np.ndarray,
+        ids: np.ndarray,
+        beta: np.ndarray,
+        assignments: np.ndarray,
+        cluster_f: np.ndarray,
+        s: np.ndarray,
+        scalar_K: float,
+    ) -> np.ndarray:
+        """
+        Sum of squared errors per biomarker on training data (same indexing as fit).
+        Returns array of shape (n_biomarkers,).
+        """
+        n_biomarkers = X_obs.shape[1]
+        n_subtypes = len(cluster_f)
+        sse_per_b = np.zeros(n_biomarkers)
+        X_pred_by_cluster = []
+        for subtype in range(n_subtypes):
+            f_cluster = np.ravel(cluster_f[subtype])
+            X_pred_by_cluster.append(
+                solve_system(np.zeros(n_biomarkers), f_cluster, self.K, self.t_span, scalar_K)
+            )
+        for r in range(X_obs.shape[0]):
+            patient_id = ids[r]
+            subtype = assignments[patient_id]
+            beta_r = beta[patient_id]
+            t = beta_r + dt[r]
+            X_pred_sub = X_pred_by_cluster[subtype]  # (n_biomarkers, len(t_span))
+            pred_r = np.array([
+                np.interp(t, self.t_span, X_pred_sub[b] * s[b]) for b in range(n_biomarkers)
+            ])
+            sse_per_b += (X_obs[r] - pred_r) ** 2
+        return sse_per_b
+
     def _bic_n_params(self) -> int:
         """
-        Number of free parameters for BIC (population parameters only; no subject-level beta).
-        Requires fit() to have been called.
+        Number of free parameters for BIC (population only; no subject-level beta).
+        K = n_biomarkers (s) + 1 (time scale) + (n_cog * n_subtypes if lambda_cog > 0)
+            + sum over subtypes of #(f_i >= 0.05). Entries with f < 0.05 are treated
+            as effectively zero (not counted) to avoid over-penalizing sparse subtypes.
         """
-        if not hasattr(self, "final_s") or not hasattr(self, "cluster_cog_a"):
+        if not hasattr(self, "final_s") or not hasattr(self, "cluster_f"):
             raise RuntimeError("fit() must be called before _bic_n_params()")
 
         n_biomarkers = self.final_s.shape[0]
         n_subtypes = self.n_subtypes
 
-        # cluster_cog_a is a list of per-subtype arrays; infer n_cog_features from first subtype
-        if not isinstance(self.cluster_cog_a, (list, tuple)) or len(self.cluster_cog_a) == 0:
-            raise RuntimeError("cluster_cog_a is empty or invalid; fit() may have failed")
+        # Global: s (n_biomarkers), time scale (1)
+        k = n_biomarkers + 1
 
-        first_cog_a = np.asarray(self.cluster_cog_a[0])
-        n_cog_features = first_cog_a.shape[0]
+        # Clinical params only if cognitive weight > 0
+        if self.lambda_cog > 0 and hasattr(self, "cluster_cog_a") and self.cluster_cog_a:
+            first_cog_a = np.asarray(self.cluster_cog_a[0])
+            n_cog = first_cog_a.shape[0]
+            k += n_cog * n_subtypes  # cog_a per subtype; cog_b counted as 1 per subtype typically
+            # If you store cog_b as scalar per subtype: add n_subtypes
+            k += n_subtypes  # cog_b per subtype
 
-        # Global: s (n_biomarkers), scalar_K (1)
-        # Per subtype: f (n_biomarkers), cog_a (n_cog_features), cog_b (1)
-        k = (n_biomarkers + 1) + n_subtypes * (n_biomarkers + n_cog_features + 1)
+        # Forcing terms: count f >= threshold per subtype (f < 0.05 treated as effectively zero)
+        f_param_threshold = 0.05
+        for subtype in range(n_subtypes):
+            f_sub = np.ravel(self.cluster_f[subtype])
+            k += int(np.sum(f_sub >= f_param_threshold))
+
         return k
 
     def bic(self, X: list = None) -> float:
         """
-        Bayesian Information Criterion on training data (lower is better).
-        Uses Gaussian residual likelihood with MLE variance; n = total scalar observations.
-        Call after fit(); uses stored n_obs_ and lse_final from the last fit.
+        BIC = K*ln(n) + 2*SSE_norm (lower is better).
+        n = total scalar observations (biomarkers * timepoint-subjects).
+        SSE_norm = sum over biomarkers of (SSE_b / sigma_b^2).
+        sigma_b^2 = null/reference variance for biomarker b (overall variance on training data),
+        so the fit term varies across models instead of canceling.
         """
         if not hasattr(self, "n_obs_") or not hasattr(self, "lse_final"):
             raise RuntimeError("fit() must be called before bic()")
-        N_obs = self.n_obs_
-        LSE = self.lse_final
-        normalized_sse = self.normalized_
+        if not hasattr(self, "_sse_per_biomarker") or not hasattr(self, "_n_obs_rows"):
+            raise RuntimeError("fit() must have set _sse_per_biomarker and _n_obs_rows")
+        if not hasattr(self, "_var_per_biomarker_null"):
+            raise RuntimeError("fit() must have set _var_per_biomarker_null (null variance per biomarker)")
 
-## SAVE THE VARIANCE IN THE TRAINING DATA of the fold
+        n = self.n_obs_  # total scalar observations
+        n_obs_rows = self._n_obs_rows
+        n_biomarkers = self._sse_per_biomarker.shape[0]
+        # df = max(n_obs_rows - 1, 1)  # 2/23/26: used for sigma^2 = SSE/df (caused cancelation)
 
-        sigma2 = max(LSE / N_obs, 1e-12)
+        sse_norm = 0.0
+        for b in range(n_biomarkers):
+            # sigma2_b = max(self._sse_per_biomarker[b] / df, 1e-12)
+            sigma2_b = self._var_per_biomarker_null[b]  # null reference: overall variance of biomarker b
+            sse_norm += self._sse_per_biomarker[b] / sigma2_b
+
         k = self._bic_n_params()
-        # -2*ln(L) = N_obs * (1 + ln(2*pi) + ln(sigma2))
-        #neg2_log_L = N_obs * (1.0 + np.log(2.0 * np.pi) + np.log(sigma2))
-        neg2_log_L = N_obs * (1.0 + np.log(2.0 * np.pi) +(sigma2/2.0))
-        BIC = neg2_log_L + k * np.log(N_obs)
+        # BIC = k * np.log(n) - 2.0 * sse_norm  # 2/23/26: switched sign to +
+        BIC = k * np.log(n) + 2.0 * sse_norm
         return float(BIC)
-    
+
 
 def fit_subtyping_em_with_assignments(
     X: list,

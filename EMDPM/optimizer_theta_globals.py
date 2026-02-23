@@ -3,6 +3,11 @@ from scipy.optimize import minimize
 from scipy.interpolate import CubicSpline
 from .utils import solve_system
 
+# Log-normal prior center for scalar_K (penalty pulls toward this value)
+SCALAR_K_CENTER = 0.1
+# Lower bound for scalar_K in log-normal penalty/gradient to avoid log(0) and divide-by-zero
+SCALAR_K_MIN = 1e-12
+
 def theta_s_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
                  K: np.ndarray, t_span: np.ndarray, f: np.ndarray,
                  lambda_s: float = 0.0, lambda_scalar: float = 0.0) -> float:
@@ -46,8 +51,11 @@ def theta_s_loss(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         x_pred[:, j] = np.interp(t_obs, t_span, x_scaled[j])
     
     residuals = x_obs - x_pred
-    loss = np.sum(residuals**2) + lambda_s * np.sum(s**2) + lambda_scalar * scalar_K**2
-    
+    # loss = np.sum(residuals**2) + lambda_s * np.sum(s**2) + lambda_scalar * scalar_K**2  # old L2
+    scalar_K_safe = max(scalar_K, SCALAR_K_MIN)
+    lognorm_penalty = 0.5 * lambda_scalar * (np.log(scalar_K_safe) - np.log(SCALAR_K_CENTER)) ** 2
+    loss = np.sum(residuals**2) + lambda_s * np.sum(s**2) + lognorm_penalty
+
     return loss
 
 def theta_s_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
@@ -93,8 +101,11 @@ def theta_s_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         x_pred[:, j] = np.interp(t_obs, t_span, x_scaled[j])
     
     residuals = x_obs - x_pred
-    loss = np.sum(residuals**2) + lambda_s * np.sum(s**2) + lambda_scalar * scalar_K**2
-    
+    # loss = np.sum(residuals**2) + lambda_s * np.sum(s**2) + lambda_scalar * scalar_K**2  # old L2
+    scalar_K_safe = max(scalar_K, SCALAR_K_MIN)
+    lognorm_penalty = 0.5 * lambda_scalar * (np.log(scalar_K_safe) - np.log(SCALAR_K_CENTER)) ** 2
+    loss = np.sum(residuals**2) + lambda_s * np.sum(s**2) + lognorm_penalty
+
     # Gradient with respect to s
     # d/ds (s * x) = x, so gradient of residual^2 is -2 * residuals * x_pred / s
     # But x_pred = s * x_interp, so we need to use x_interp (unscaled)
@@ -118,8 +129,10 @@ def theta_s_loss_jac(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
         scalar_obs[:, i] = interp_fn(t_obs)
     
     # Need to account for s scaling: d/ds(s*x) with respect to scalar_K
-    grad_scalar_K = -2 * np.sum(residuals * (scalar_obs * s[None, :])) + 2 * lambda_scalar * scalar_K
-    
+    # grad_scalar_K = -2 * np.sum(residuals * (scalar_obs * s[None, :])) + 2 * lambda_scalar * scalar_K  # old L2
+    lognorm_grad = lambda_scalar * (np.log(scalar_K_safe) - np.log(SCALAR_K_CENTER)) / scalar_K_safe
+    grad_scalar_K = -2 * np.sum(residuals * (scalar_obs * s[None, :])) + lognorm_grad
+
     grad = np.concatenate([grad_s, [grad_scalar_K]])
     
     return loss, grad
@@ -159,7 +172,10 @@ def theta_s_loss_multi(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndarray,
             x_pred[mask_k, j] = np.interp(t_k, t_span, x_scaled_list[k][j])
 
     residuals = x_obs - x_pred
-    loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lambda_scalar * scalar_K ** 2
+    # loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lambda_scalar * scalar_K ** 2  # old L2
+    scalar_K_safe = max(scalar_K, SCALAR_K_MIN)
+    lognorm_penalty = 0.5 * lambda_scalar * (np.log(scalar_K_safe) - np.log(SCALAR_K_CENTER)) ** 2
+    loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lognorm_penalty
     return loss
 
 
@@ -210,7 +226,10 @@ def theta_s_loss_jac_multi(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndar
             x_pred[mask_k, j] = np.interp(t_k, t_span, x_scaled_list[k][j])
 
     residuals = x_obs - x_pred
-    loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lambda_scalar * scalar_K ** 2
+    # loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lambda_scalar * scalar_K ** 2  # old L2
+    scalar_K_safe = max(scalar_K, SCALAR_K_MIN)
+    lognorm_penalty = 0.5 * lambda_scalar * (np.log(scalar_K_safe) - np.log(SCALAR_K_CENTER)) ** 2
+    loss = np.sum(residuals ** 2) + lambda_s * np.sum(s ** 2) + lognorm_penalty
 
     # Gradient for s: vectorize by subtype (one interp per subtype per biomarker, then sum)
     grad_s = np.zeros(n_biomarkers)
@@ -231,7 +250,9 @@ def theta_s_loss_jac_multi(params: np.ndarray, t_obs: np.ndarray, x_obs: np.ndar
         a_i = int(observation_assignments[i])
         scalar_obs_i = np.array([splines_scalar[a_i][j](t_obs[i]) for j in range(n_biomarkers)])
         grad_scalar_K = grad_scalar_K - 2 * np.sum(residuals[i] * s * scalar_obs_i)
-    grad_scalar_K = grad_scalar_K + 2 * lambda_scalar * scalar_K
+    # grad_scalar_K = grad_scalar_K + 2 * lambda_scalar * scalar_K  # old L2
+    lognorm_grad = lambda_scalar * (np.log(scalar_K_safe) - np.log(SCALAR_K_CENTER)) / scalar_K_safe
+    grad_scalar_K = grad_scalar_K + lognorm_grad
 
     grad = np.concatenate([grad_s, [grad_scalar_K]])
     return loss, grad

@@ -317,8 +317,12 @@ np.savez(out_path,
          # K-fold CV on training set (for hyperparameter selection within each K)
          cv_mean_lse=cv_mean_lse,
          cv_std_lse=cv_std_lse,
+         cv_variance=float(cv_std_lse**2),
          cv_per_fold_lse=np.array(fold_lses),
-         n_folds=N_FOLDS)
+         n_folds=N_FOLDS,
+         # For BIC recompute without reloading data
+         sse_per_biomarker=np.array(subtyping_em._sse_per_biomarker),
+         n_obs_rows=int(subtyping_em._n_obs_rows))
 print("Saved:", out_path)
 print(f"CV mean LSE: {cv_mean_lse:.6f}")
 print(f"Final LSE: {subtyping_em.lse_history[-1]:.6f}")

@@ -1,0 +1,134 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup (two-level: K by BIC, hyperparams by CV) ===
+n_subtypes candidates: [2, 3, 4]
+Hyperparameter combinations per K: 135
+Total combinations: 405
+Current candidate: 147
+
+=== Parameters for Candidate 147 (K=3, hyper idx=12) ===
+  lambda_f: 1.0
+  lambda_cog: 0.0
+  lambda_scalar: 0.95
+  lambda_jsd: 50
+  lambda_beta: 0.0
+  n_subtypes: 3
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [01:47<5:56:59, 107.64s/it]  1%|1         | 2/200 [03:01<4:48:55, 87.55s/it]   2%|1         | 3/200 [03:59<4:03:30, 74.16s/it]  2%|2         | 4/200 [04:36<3:14:16, 59.47s/it]  2%|2         | 4/200 [15:14<12:26:42, 228.59s/it]
+Estimating beta and subtype assignments:   0%|          | 0/39 [00:00<?, ?it/s]Estimating beta and subtype assignments:   5%|5         | 2/39 [00:00<00:03, 11.05it/s]Estimating beta and subtype assignments:  10%|#         | 4/39 [00:00<00:04,  8.25it/s]Estimating beta and subtype assignments:  15%|#5        | 6/39 [00:00<00:03,  9.61it/s]Estimating beta and subtype assignments:  21%|##        | 8/39 [00:00<00:03,  8.20it/s]Estimating beta and subtype assignments:  23%|##3       | 9/39 [00:01<00:05,  5.73it/s]Estimating beta and subtype assignments:  26%|##5       | 10/39 [00:01<00:05,  5.03it/s]Estimating beta and subtype assignments:  31%|###       | 12/39 [00:01<00:04,  6.48it/s]Estimating beta and subtype assignments:  33%|###3      | 13/39 [00:01<00:03,  6.60it/s]Estimating beta and subtype assignments:  36%|###5      | 14/39 [00:02<00:03,  6.84it/s]Estimating beta and subtype assignments:  38%|###8      | 15/39 [00:02<00:03,  6.36it/s]Estimating beta and subtype assignments:  44%|####3     | 17/39 [00:02<00:02,  7.76it/s]Estimating beta and subtype assignments:  46%|####6     | 18/39 [00:02<00:02,  7.26it/s]Estimating beta and subtype assignments:  49%|####8     | 19/39 [00:02<00:03,  5.77it/s]Estimating beta and subtype assignments:  51%|#####1    | 20/39 [00:03<00:03,  5.45it/s]Estimating beta and subtype assignments:  54%|#####3    | 21/39 [00:03<00:02,  6.16it/s]Estimating beta and subtype assignments:  56%|#####6    | 22/39 [00:03<00:02,  6.00it/s]Estimating beta and subtype assignments:  59%|#####8    | 23/39 [00:03<00:02,  6.11it/s]Estimating beta and subtype assignments:  62%|######1   | 24/39 [00:03<00:02,  6.32it/s]Estimating beta and subtype assignments:  64%|######4   | 25/39 [00:03<00:01,  7.00it/s]Estimating beta and subtype assignments:  67%|######6   | 26/39 [00:03<00:01,  6.89it/s]Estimating beta and subtype assignments:  69%|######9   | 27/39 [00:04<00:01,  6.40it/s]Estimating beta and subtype assignments:  72%|#######1  | 28/39 [00:04<00:01,  6.82it/s]Estimating beta and subtype assignments:  74%|#######4  | 29/39 [00:04<00:01,  7.49it/s]Estimating beta and subtype assignments:  77%|#######6  | 30/39 [00:04<00:01,  7.99it/s]Estimating beta and subtype assignments:  79%|#######9  | 31/39 [00:04<00:01,  6.91it/s]Estimating beta and subtype assignments:  82%|########2 | 32/39 [00:04<00:00,  7.07it/s]Estimating beta and subtype assignments:  85%|########4 | 33/39 [00:04<00:00,  6.81it/s]Estimating beta and subtype assignments:  90%|########9 | 35/39 [00:05<00:00,  8.62it/s]Estimating beta and subtype assignments:  92%|#########2| 36/39 [00:05<00:00,  8.50it/s]Estimating beta and subtype assignments:  95%|#########4| 37/39 [00:05<00:00,  7.29it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:05<00:00,  8.86it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:05<00:00,  7.06it/s]
+  Fold 1/3 val LSE: 221.835653
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [02:07<7:03:54, 127.81s/it]  1%|1         | 2/200 [03:09<4:52:55, 88.76s/it]   2%|1         | 3/200 [03:58<3:52:40, 70.87s/it]  2%|2         | 4/200 [04:43<3:17:53, 60.58s/it]  2%|2         | 5/200 [05:32<3:03:25, 56.44s/it]  3%|3         | 6/200 [06:17<2:50:09, 52.63s/it]  4%|3         | 7/200 [07:11<2:49:51, 52.80s/it]  4%|4         | 8/200 [07:48<2:33:46, 48.06s/it]  4%|4         | 9/200 [08:24<2:20:50, 44.24s/it]  5%|5         | 10/200 [08:55<2:06:42, 40.01s/it]  6%|5         | 11/200 [09:26<1:57:10, 37.20s/it]  6%|5         | 11/200 [17:17<4:57:12, 94.35s/it]
+Estimating beta and subtype assignments:   0%|          | 0/39 [00:00<?, ?it/s]Estimating beta and subtype assignments:   3%|2         | 1/39 [00:00<00:03,  9.64it/s]Estimating beta and subtype assignments:   5%|5         | 2/39 [00:00<00:03,  9.66it/s]Estimating beta and subtype assignments:  10%|#         | 4/39 [00:00<00:03, 11.08it/s]Estimating beta and subtype assignments:  15%|#5        | 6/39 [00:00<00:03, 10.50it/s]Estimating beta and subtype assignments:  21%|##        | 8/39 [00:00<00:02, 11.08it/s]Estimating beta and subtype assignments:  26%|##5       | 10/39 [00:00<00:02, 10.55it/s]Estimating beta and subtype assignments:  31%|###       | 12/39 [00:01<00:02, 11.10it/s]Estimating beta and subtype assignments:  36%|###5      | 14/39 [00:01<00:02, 11.01it/s]Estimating beta and subtype assignments:  41%|####1     | 16/39 [00:01<00:02, 11.14it/s]Estimating beta and subtype assignments:  46%|####6     | 18/39 [00:01<00:01, 11.01it/s]Estimating beta and subtype assignments:  51%|#####1    | 20/39 [00:01<00:01, 10.60it/s]Estimating beta and subtype assignments:  56%|#####6    | 22/39 [00:02<00:01, 10.68it/s]Estimating beta and subtype assignments:  62%|######1   | 24/39 [00:02<00:01, 10.36it/s]Estimating beta and subtype assignments:  67%|######6   | 26/39 [00:02<00:01, 10.53it/s]Estimating beta and subtype assignments:  72%|#######1  | 28/39 [00:02<00:01, 10.30it/s]Estimating beta and subtype assignments:  77%|#######6  | 30/39 [00:02<00:00, 10.78it/s]Estimating beta and subtype assignments:  82%|########2 | 32/39 [00:02<00:00, 10.77it/s]Estimating beta and subtype assignments:  87%|########7 | 34/39 [00:03<00:00, 11.20it/s]Estimating beta and subtype assignments:  92%|#########2| 36/39 [00:03<00:00, 10.81it/s]Estimating beta and subtype assignments:  97%|#########7| 38/39 [00:03<00:00, 11.12it/s]Estimating beta and subtype assignments: 100%|##########| 39/39 [00:03<00:00, 10.84it/s]
+  Fold 2/3 val LSE: 219.231628
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [01:49<6:01:36, 109.03s/it]  1%|1         | 2/200 [02:10<3:09:44, 57.50s/it]   2%|1         | 3/200 [02:22<2:00:07, 36.59s/it]  2%|2         | 4/200 [02:46<1:43:51, 31.79s/it]  2%|2         | 5/200 [03:05<1:28:11, 27.14s/it]/home/dsemchin/Progression_models_simulations/EMDPM/utils.py:32: RuntimeWarning: overflow encountered in matmul
+  dxdt =  (np.eye(K.shape[0]) - np.diag(x)) @ ((scalar_K * K @ x) + f) # TODO: double check position of f wrt parenthesis
+/home/dsemchin/Progression_models_simulations/EMDPM/utils.py:32: RuntimeWarning: invalid value encountered in matmul
+  dxdt =  (np.eye(K.shape[0]) - np.diag(x)) @ ((scalar_K * K @ x) + f) # TODO: double check position of f wrt parenthesis
+/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/integrate/_ivp/lsoda.py:161: UserWarning: lsoda: Excess accuracy requested (tolerances too small).
+  solver._y, solver.t = integrator.run(
+Traceback (most recent call last):
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/experiments/qsub_jobs/qsub_results/2026_2_22_ppmi_new_bic_iitconnect/run_ppmi_subtyping_gridsearch.py", line 203, in <module>
+    em_fold.fit(X_train_fold)
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/subtyping_em_transformer.py", line 371, in fit
+    f_cluster = fit_theta_cluster(
+                ^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/optimizer_theta_cluster.py", line 181, in fit_theta_cluster
+    result = minimize(
+             ^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_minimize.py", line 713, in minimize
+    res = _minimize_lbfgsb(fun, x0, args, jac, bounds,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_lbfgsb_py.py", line 407, in _minimize_lbfgsb
+    f, g = func_and_grad(x)
+           ^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_differentiable_functions.py", line 297, in fun_and_grad
+    self._update_grad()
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_differentiable_functions.py", line 267, in _update_grad
+    self._update_grad_impl()
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_differentiable_functions.py", line 181, in update_grad
+    self.g = approx_derivative(fun_wrapped, self.x, f0=self.f,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_numdiff.py", line 519, in approx_derivative
+    return _dense_difference(fun_wrapped, x0, f0, h,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_numdiff.py", line 590, in _dense_difference
+    df = fun(x) - f0
+         ^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_numdiff.py", line 470, in fun_wrapped
+    f = np.atleast_1d(fun(x, *args, **kwargs))
+                      ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/scipy/optimize/_differentiable_functions.py", line 145, in fun_wrapped
+    fx = fun(np.copy(x), *args)
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/Progression_models_simulations/EMDPM/optimizer_theta_cluster.py", line 47, in theta_cluster_loss
+    x_pred[:, j] = np.interp(t_obs, t_span, x_scaled[j])
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/dsemchin/miniconda3/lib/python3.12/site-packages/numpy/lib/function_base.py", line 1599, in interp
+    return interp_func(x, xp, fp, left, right)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: fp and xp are not of the same length.
+  2%|2         | 5/200 [07:11<4:40:33, 86.32s/it]
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.3008931655279D-15
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.3008931655279D-15
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.2037743538861D-15
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.2037743538861D-15
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.1380017378419D-15
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.1380017378419D-15
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.9345822244331D-16
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.9345822244331D-16
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.6329195408539D-16
+ lsoda--  warning..internal t (=r1) and h (=r2) are  
+       such that in the machine, t + h = t on the next step  
+       (h = step size). solver will continue anyway  
+      in above,  r1 =  0.5711131899846D+01   r2 =  0.6329195408539D-16
+ lsoda--  above warning has been issued i1 times.    
+       it will not be issued again for this problem  
+      in above message,  i1 =        10
+ lsoda--  at t (=r1), too much accuracy requested    
+       for precision of machine..  see tolsf (=r2)   
+      in above,  r1 =  0.5711131899846D+01   r2 =                  NaN
