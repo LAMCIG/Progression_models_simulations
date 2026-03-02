@@ -1,0 +1,35 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup (two-level: K by BIC, hyperparams by CV) ===
+n_subtypes candidates: [2, 3, 4]
+Hyperparameter combinations per K: 108
+Total combinations: 324
+Current candidate: 307
+
+=== Parameters for Candidate 307 (K=4, hyper idx=91) ===
+  lambda_f: 1.75
+  lambda_cog: 0.001
+  lambda_scalar: 5.0
+  lambda_jsd: 50
+  lambda_beta: 0.0
+  n_subtypes: 4
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [00:32<1:46:59, 32.26s/it]  1%|1         | 2/200 [00:51<1:20:13, 24.31s/it]  2%|1         | 3/200 [01:05<1:04:54, 19.77s/it]  2%|2         | 4/200 [01:20<58:47, 18.00s/it]    2%|2         | 5/200 [01:41<1:02:08, 19.12s/it]  3%|3         | 6/200 [07:20<6:53:05, 127.76s/it]  4%|3         | 7/200 [07:46<5:04:26, 94.65s/it]   4%|4         | 8/200 [08:12<3:52:25, 72.63s/it]  4%|4         | 9/200 [08:43<3:10:10, 59.74s/it]  5%|5         | 10/200 [12:57<6:19:14, 119.76s/it]  6%|5         | 11/200 [24:44<15:43:08, 299.41s/it]  6%|6         | 12/200 [25:03<11:10:35, 214.02s/it]  6%|6         | 13/200 [30:32<12:55:56, 248.97s/it]  7%|7         | 14/200 [30:51<9:16:27, 179.50s/it]   8%|7         | 15/200 [31:10<6:44:30, 131.19s/it]  8%|8         | 16/200 [31:39<5:07:21, 100.23s/it]  8%|8         | 17/200 [31:56<3:49:28, 75.24s/it]   9%|9         | 18/200 [32:13<2:55:24, 57.83s/it] 10%|9         | 19/200 [32:30<2:17:22, 45.54s/it] 10%|#         | 20/200 [42:18<10:25:19, 208.44s/it] 10%|#         | 21/200 [42:43<7:37:16, 153.27s/it]  11%|#1        | 22/200 [42:58<5:31:38, 111.79s/it] 12%|#1        | 23/200 [47:38<7:59:02, 162.39s/it] 12%|#2        | 24/200 [54:05<11:13:24, 229.57s/it] 12%|#2        | 25/200 [57:48<11:04:33, 227.85s/it] 13%|#3        | 26/200 [58:09<8:00:23, 165.65s/it]  14%|#3        | 27/200 [1:03:34<10:15:51, 213.59s/it] 14%|#4        | 28/200 [1:09:16<12:02:42, 252.11s/it] 14%|#4        | 29/200 [1:13:20<11:51:23, 249.61s/it] 15%|#5        | 30/200 [1:18:13<12:23:42, 262.49s/it] 16%|#5        | 31/200 [1:18:33<8:54:33, 189.78s/it]  16%|#6        | 32/200 [1:24:55<11:32:44, 247.41s/it] 16%|#6        | 33/200 [1:29:05<11:31:21, 248.39s/it] 17%|#7        | 34/200 [1:29:30<8:21:04, 181.11s/it]  18%|#7        | 35/200 [1:34:11<9:40:58, 211.26s/it]

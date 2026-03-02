@@ -286,6 +286,9 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             pbar = DummyProgressBar()
 
         self.assignment_probabilities_ = None
+
+        # Patient IDs in same order as current_beta/assignments (index i <-> unique_ids[i])
+        unique_ids = np.unique(ids)
             
         while loop_iter < self.max_iter:
             hist_idx = loop_iter + 1
@@ -332,7 +335,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                 if np.sum(cluster_mask) == 0:
                     continue
                 cluster_patient_indices = np.where(cluster_mask)[0]
-                cluster_patient_mask = np.isin(ids, cluster_patient_indices)
+                cluster_patient_ids = unique_ids[cluster_patient_indices]
+                cluster_patient_mask = np.isin(ids, cluster_patient_ids)
                 
                 cog_subtype = cog[cluster_patient_mask]
                 dt_subtype = dt[cluster_patient_mask]
@@ -357,7 +361,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                     continue
                 
                 # Get observations for patients in this cluster
-                cluster_patient_mask = np.isin(ids, cluster_patient_indices)
+                cluster_patient_ids = unique_ids[cluster_patient_indices]
+                cluster_patient_mask = np.isin(ids, cluster_patient_ids)
                 X_obs_cluster = X_obs[cluster_patient_mask, :]
                 dt_cluster = dt[cluster_patient_mask]
                 ids_cluster = ids[cluster_patient_mask]
@@ -429,7 +434,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
                         if np.sum(cluster_mask) == 0:
                             continue
                         cluster_patient_indices = np.where(cluster_mask)[0]
-                        cluster_patient_mask = np.isin(ids, cluster_patient_indices)
+                        cluster_patient_ids = unique_ids[cluster_patient_indices]
+                        cluster_patient_mask = np.isin(ids, cluster_patient_ids)
                         cog_subtype = cog[cluster_patient_mask]
                         dt_subtype = dt[cluster_patient_mask]
                         ids_subtype = ids[cluster_patient_mask]
@@ -967,7 +973,7 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
         """
         Number of free parameters for BIC (population only; no subject-level beta).
         K = n_biomarkers (s) + 1 (time scale) + (n_cog * n_subtypes if lambda_cog > 0)
-            + sum over subtypes of #(f_i >= 0.05). Entries with f < 0.05 are treated
+            + sum over subtypes of #(f_i >= 0.01). Entries with f < 0.01 are treated
             as effectively zero (not counted) to avoid over-penalizing sparse subtypes.
         """
         if not hasattr(self, "final_s") or not hasattr(self, "cluster_f"):
@@ -987,8 +993,8 @@ class SubtypingEM(BaseEstimator, TransformerMixin):
             # If you store cog_b as scalar per subtype: add n_subtypes
             k += n_subtypes  # cog_b per subtype
 
-        # Forcing terms: count f >= threshold per subtype (f < 0.05 treated as effectively zero)
-        f_param_threshold = 0.05
+        # Forcing terms: count f >= threshold per subtype (f < 0.01 treated as effectively zero)
+        f_param_threshold = 0.01
         for subtype in range(n_subtypes):
             f_sub = np.ravel(self.cluster_f[subtype])
             k += int(np.sum(f_sub >= f_param_threshold))

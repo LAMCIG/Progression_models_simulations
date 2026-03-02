@@ -17,7 +17,7 @@ args = parser.parse_args()
 current_candidate = args.candidate
 
 df = pd.read_csv("/home/dsemchin/data/adni_complete.csv")
-df_K = pd.read_csv("/home/dsemchin/data/mean_NORM_con_22.csv")
+df_K = pd.read_csv("/home/dsemchin/data/iit_connectivity_matrix/streamline_normalized_top_regions/iit_connectome_top_20.csv")
 #df_K = pd.read_csv("/data01/bgutman/LEGACY/Skoltech/datasets/Connectomes/mean_NORM_con_min_edges=3__sparsity=0.3.csv")
 n_biomarkers = 68
 
@@ -145,10 +145,10 @@ N_SUBTYPES_LIST = [2, 3, 4]  # candidate number of subtypes; select among these 
 
 # Hyperparameter grid (no n_subtypes): tuned by CV within each K
 param_grid_hyper = {
-    "lambda_f": [1.0, 1.2, 1.4],
-    "lambda_cog": [0.0, 0.05, 0.1],
-    "lambda_scalar": [0.6, 0.8, 1.0, 1.2],
-    "lambda_jsd": [0, 10, 50, 100, 1000],
+    "lambda_f": [1.0, 1.25, 1.5],
+    "lambda_cog": [0.0, 0.01, 0.1, 1.0],
+    "lambda_scalar": [0.75, 1.0, 1.25, 1.5],
+    "lambda_jsd": [0, 10, 50, 100],
     "lambda_beta": [0.0]
 }
 hyper_names = list(param_grid_hyper.keys())

@@ -1,0 +1,35 @@
+original size: (880, 250)
+after drop na (868, 250)
+one time subj_id: 227
+after drop dupes (504, 250)
+['L_bankssts_thickavg', 'L_caudalanteriorcingulate_thickavg', 'L_caudalmiddlefrontal_thickavg', 'L_cuneus_thickavg', 'L_entorhinal_thickavg', 'L_fusiform_thickavg', 'L_inferiorparietal_thickavg', 'L_inferiortemporal_thickavg', 'L_isthmuscingulate_thickavg', 'L_lateraloccipital_thickavg', 'L_lateralorbitofrontal_thickavg', 'L_lingual_thickavg', 'L_medialorbitofrontal_thickavg', 'L_middletemporal_thickavg', 'L_parahippocampal_thickavg', 'L_paracentral_thickavg', 'L_parsopercularis_thickavg', 'L_parsorbitalis_thickavg', 'L_parstriangularis_thickavg', 'L_pericalcarine_thickavg', 'L_postcentral_thickavg', 'L_posteriorcingulate_thickavg', 'L_precentral_thickavg', 'L_precuneus_thickavg', 'L_rostralanteriorcingulate_thickavg', 'L_rostralmiddlefrontal_thickavg', 'L_superiorfrontal_thickavg', 'L_superiorparietal_thickavg', 'L_superiortemporal_thickavg', 'L_supramarginal_thickavg', 'L_frontalpole_thickavg', 'L_temporalpole_thickavg', 'L_transversetemporal_thickavg', 'L_insula_thickavg', 'R_bankssts_thickavg', 'R_caudalanteriorcingulate_thickavg', 'R_caudalmiddlefrontal_thickavg', 'R_cuneus_thickavg', 'R_entorhinal_thickavg', 'R_fusiform_thickavg', 'R_inferiorparietal_thickavg', 'R_inferiortemporal_thickavg', 'R_isthmuscingulate_thickavg', 'R_lateraloccipital_thickavg', 'R_lateralorbitofrontal_thickavg', 'R_lingual_thickavg', 'R_medialorbitofrontal_thickavg', 'R_middletemporal_thickavg', 'R_parahippocampal_thickavg', 'R_paracentral_thickavg', 'R_parsopercularis_thickavg', 'R_parsorbitalis_thickavg', 'R_parstriangularis_thickavg', 'R_pericalcarine_thickavg', 'R_postcentral_thickavg', 'R_posteriorcingulate_thickavg', 'R_precentral_thickavg', 'R_precuneus_thickavg', 'R_rostralanteriorcingulate_thickavg', 'R_rostralmiddlefrontal_thickavg', 'R_superiorfrontal_thickavg', 'R_superiorparietal_thickavg', 'R_superiortemporal_thickavg', 'R_supramarginal_thickavg', 'R_frontalpole_thickavg', 'R_temporalpole_thickavg', 'R_transversetemporal_thickavg', 'R_insula_thickavg']
+nans in X: 0
+infs in X: 0
+(68, 68) <class 'numpy.ndarray'>
+X.size:  (504, 68)
+nans in cog: 0
+infs in cog: 0
+beta_init summary: count    146.000000
+mean      15.622559
+std        7.789749
+min        0.000000
+25%        9.586119
+50%       15.547791
+75%       20.682329
+max       40.000000
+dtype: float64
+
+=== Grid Search Setup (two-level: K by BIC, hyperparams by CV) ===
+n_subtypes candidates: [2, 3, 4]
+Hyperparameter combinations per K: 108
+Total combinations: 324
+Current candidate: 317
+
+=== Parameters for Candidate 317 (K=4, hyper idx=101) ===
+  lambda_f: 1.75
+  lambda_cog: 0.005
+  lambda_scalar: 5.0
+  lambda_jsd: 10
+  lambda_beta: 0.0
+  n_subtypes: 4
+  0%|          | 0/200 [00:00<?, ?it/s]  0%|          | 1/200 [00:35<1:58:01, 35.59s/it]  1%|1         | 2/200 [01:11<1:57:40, 35.66s/it]  2%|1         | 3/200 [01:33<1:36:11, 29.30s/it]  2%|2         | 4/200 [01:55<1:26:59, 26.63s/it]  2%|2         | 5/200 [09:33<9:51:39, 182.05s/it]  3%|3         | 6/200 [09:57<6:54:55, 128.33s/it]  4%|3         | 7/200 [10:31<5:13:47, 97.55s/it]   4%|4         | 8/200 [11:02<4:04:42, 76.47s/it]  4%|4         | 9/200 [11:19<3:03:40, 57.70s/it]  5%|5         | 10/200 [15:44<6:26:03, 121.91s/it]  6%|5         | 11/200 [16:09<4:50:14, 92.14s/it]   6%|6         | 12/200 [16:49<3:59:02, 76.29s/it]  6%|6         | 13/200 [17:16<3:10:43, 61.19s/it]  7%|7         | 14/200 [17:50<2:44:56, 53.21s/it]  8%|7         | 15/200 [18:14<2:16:30, 44.27s/it]  8%|8         | 16/200 [18:42<2:00:37, 39.33s/it]  8%|8         | 17/200 [19:04<1:43:59, 34.10s/it]  9%|9         | 18/200 [24:37<6:15:53, 123.92s/it] 10%|9         | 19/200 [24:59<4:41:25, 93.29s/it]  10%|#         | 20/200 [25:25<3:39:29, 73.16s/it] 10%|#         | 21/200 [25:52<2:56:59, 59.33s/it] 11%|#1        | 22/200 [31:07<6:43:31, 136.02s/it] 12%|#1        | 23/200 [31:46<5:15:54, 107.09s/it] 12%|#2        | 24/200 [32:12<4:02:11, 82.57s/it] 
